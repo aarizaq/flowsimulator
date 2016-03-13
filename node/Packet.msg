@@ -1,0 +1,74 @@
+//
+// This file is part of an OMNeT++/OMNEST simulation example.
+//
+// Copyright (C) 1992-2008 Andras Varga
+//
+// This file is distributed WITHOUT ANY WARRANTY. See the file
+// `license' for details on this and other legal matters.
+//
+
+
+//
+// Represents a packet in the network.
+//
+
+
+struct LinkData
+{
+    int node;
+    double residual;
+    double time;
+    double nominal;
+}
+
+enum PacketCode
+{
+    RESERVE = 1; // start a call
+    RELEASE = 2; // end a call
+    ACEPTED = 3; //
+    REJECTED = 4;        
+    STARTFLOW = 5;
+    ENDFLOW = 6;
+    ACTUALIZE = 7;
+    BREAK = 8;
+    RESTORE = 9;
+    RELEASEDELAYED = 10; // end a call
+}
+
+
+message PendingRelease
+{
+    uint64_t callId;
+}
+
+message RegisterMsg
+{
+    int sourceId;
+}
+
+packet Base
+{
+    int srcAddr;
+    int destAddr;
+    int hopCount;
+    int sourceId;
+    int destinationId;
+    uint64_t sequence;
+    int type @enum(PacketCode);
+}
+
+packet Packet extends Base
+{
+    int route[];
+    double cost;
+    uint64_t reserve;
+    uint64_t flowId;
+    uint64_t callId;
+}
+ 
+packet Actualize extends Packet
+{
+    LinkData linkData[];
+    int type @enum(PacketCode);
+   
+}

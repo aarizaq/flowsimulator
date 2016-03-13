@@ -1,0 +1,37 @@
+//
+// This file is part of an OMNeT++/OMNEST simulation example.
+//
+// Copyright (C) 1992-2008 Andras Varga
+//
+// This file is distributed WITHOUT ANY WARRANTY. See the file
+// `license' for details on this and other legal matters.
+//
+
+package node;
+
+//
+// Application model to generate traffic for the network.
+//
+simple CallApp like IApp
+{
+    parameters:
+        int address;  // local node address
+        string destAddresses;  // destination addresses
+        int sourceId = default(0);
+        int destinationId = default(0);
+        volatile double callArrival @unit(s) = default(exponential(20s)); // time between generating packets
+        volatile double callDuration @unit(s) = default(exponential(60s)); // time between generating packets
+        volatile double callReserve @unit(bps);  //
+        
+        bool generateFlow = default(true);        
+        volatile double TimeOn @unit(s) = default(exponential(1s)); // time between generating packets
+        volatile double TimeOff @unit(s) = default(exponential(1s)); // time between generating packets, can be 0 in in this case the flow can change the bandwith used
+        volatile double usedBandwith @unit(bps);  // 
+         
+        @display("i=block/browser");
+    gates:
+        input in;
+        output out;
+}
+
+

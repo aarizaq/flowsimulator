@@ -703,12 +703,16 @@ bool FlowRouting::preProcPacket(Packet *pk)
 
 bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int & portInput)
 {
-    auto itCallInfo = callInfomap.find(pk->getCallId());
-
-    // flow
-    if (itCallInfo->second.state != CALLUP) { // call not established yet, delete flow
-        delete pk;
-        return false;
+    bool isCallOriented = (pk->getCallId() > 0);
+    auto itCallInfo = callInfomap.end();
+    if (isCallOriented)
+    {
+        itCallInfo = callInfomap.find(pk->getCallId());
+        // flow
+        if (itCallInfo == callInfomap.end() || itCallInfo->second.state != CALLUP) { // call not established yet, delete flow
+            delete pk;
+            return false;
+        }
     }
 
     FlowInfo flowInfo;
@@ -718,71 +722,150 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
     flowInfo.used = pk->getReserve();
     flowInfo.port = portForward;
     flowInfo.portInput = portInput;
-    for (auto elem : itCallInfo->second.outputFlows) {
-        if (elem.flowId == flowInfo.flowId)
-            throw cRuntimeError("Error Flow id already reserved in the output flows");
-    }
-
-    for (auto elem : itCallInfo->second.inputFlows) {
-        if (elem.flowId == flowInfo.flowId)
-            throw cRuntimeError("Error Flow id already reserved in the input flows");
-    }
-
-    // register the flow in the input list
-    itCallInfo->second.inputFlows.push_back(flowInfo);
-
-    if (portForward != -1 && portData[portForward].portStatus == UP) {
-        if (portData[portForward].flowOcupation > pk->getReserve()) {
-            portData[portForward].flowOcupation -= pk->getReserve();
-            itCallInfo->second.outputFlows.push_back(flowInfo);
+    // check if exists this flow, if it exists throw and error
+    if (isCallOriented)
+    {
+        for (auto elem : itCallInfo->second.outputFlows) {
+            if (elem.flowId == flowInfo.flowId)
+                throw cRuntimeError("Error Flow id already reserved in the output flows");
         }
-        else // flow lost, include in pending flows.
-        {
-            if (portForward != -1)
-                pendingFlows.push_back(flowInfo);
+
+        for (auto elem : itCallInfo->second.inputFlows) {
+            if (elem.flowId == flowInfo.flowId)
+                throw cRuntimeError("Error Flow id already reserved in the input flows");
+        }
+        // register the flow in the input list
+        itCallInfo->second.inputFlows.push_back(flowInfo);
+    }
+    else {
+        // flow not assigned to a call search in the ports info
+
+        auto itFlow = inputFlows.find(flowInfo);
+        if (itFlow != inputFlows.end())
+            throw cRuntimeError("Error Flow id already  in the input port  flows: port %i", portInput);
+        inputFlows.insert(flowInfo);
+
+        itFlow = outputFlows.find(flowInfo);
+        if (itFlow != outputFlows.end())
+            throw cRuntimeError("Error Flow id already  in the output port  flows: port %i", portForward);
+    }
+
+
+    // check if port is up and if there is enough bandwidth unreserved for not oriented flows.
+    if (portForward != -1) {
+
+        if (portData[portForward].portStatus == DOWN) {
             delete pk;
             return false;
         }
+
+        // limits for not oriented flows
+        if (!isCallOriented) {
+            double limitcall = (double)portData[portForward].nominalbw * reserveCall;
+            if (limitcall > 0 &&  limitcall <= (double)portData[portForward].occupation  ) {
+                delete pk;
+                return false;
+            }
+            double limitflow = (double)portData[portForward].nominalbw * reserveFlows;
+            if (limitflow > 0 &&  limitflow <= (double)portData[portForward].flowOcupation  ) {
+                delete pk;
+                return false;
+            }
+        }
+    }
+
+    // consume the bandwidth
+    if (flowsDiscard) {
+        if (portForward != -1) {
+            if (portData[portForward].flowOcupation > pk->getReserve()) {
+                portData[portForward].flowOcupation -= pk->getReserve();
+                if (itCallInfo != callInfomap.end())
+                    itCallInfo->second.outputFlows.push_back(flowInfo);
+                else
+                    outputFlows.insert(flowInfo);
+            }
+            else // flow lost, include in pending flows.
+            {
+                pendingFlows.push_back(flowInfo);
+                delete pk;
+                return false;
+            }
+        }
+    }
+    else
+    {
+        // TODO: implementar el share mode
+        throw cRuntimeError("Mode share not implemented yet",portInput);
     }
     return true;
 }
 
 bool FlowRouting::procEndFlow(Packet *pk)
 {
+    bool isCallOriented = (pk->getCallId() > 0);
 
-    auto itCallInfo = callInfomap.find(pk->getCallId());
+    if (isCallOriented) {
+        auto itCallInfo = callInfomap.find(pk->getCallId());
 
-    for (auto it = itCallInfo->second.inputFlows.begin(); it != itCallInfo->second.inputFlows.end(); ++it) {
-        if (it->flowId == pk->getFlowId()) {
-            itCallInfo->second.inputFlows.erase(it);
-            break;
-        }
-    }
-
-    auto it = itCallInfo->second.outputFlows.begin();
-
-    while (it != itCallInfo->second.outputFlows.end()) {
-        if (it->flowId == pk->getFlowId())
-            break;
-        ++it;
-    }
-
-    if (it == itCallInfo->second.outputFlows.end()) {
-        // It has been impossible to send the start flow message to the next hop,  delete and return.
-        for (auto it = pendingFlows.begin(); it != pendingFlows.end(); ++it) {
-            if (it->flowId == pk->getFlowId() && it->callId == itCallInfo->first) {
-                pendingFlows.erase(it);
+        for (auto it = itCallInfo->second.inputFlows.begin(); it != itCallInfo->second.inputFlows.end(); ++it) {
+            if (it->flowId == pk->getFlowId()) {
+                itCallInfo->second.inputFlows.erase(it);
                 break;
             }
         }
-        delete pk;
-        return false;
-        // throw cRuntimeError("Error Flow id not found reserved");
-    }
 
-    if (it->port != -1)
-        portData[it->port].flowOcupation += it->used;
-    itCallInfo->second.outputFlows.erase(it);
+        auto it = itCallInfo->second.outputFlows.begin();
+
+        while (it != itCallInfo->second.outputFlows.end()) {
+            if (it->flowId == pk->getFlowId())
+                break;
+            ++it;
+        }
+
+        if (it == itCallInfo->second.outputFlows.end()) {
+            // It has been impossible to send the start flow message to the next hop,  delete and return.
+            for (auto it = pendingFlows.begin(); it != pendingFlows.end(); ++it) {
+                if (it->flowId == pk->getFlowId() && it->callId == itCallInfo->first) {
+                    pendingFlows.erase(it);
+                    break;
+                }
+            }
+            delete pk;
+            return false;
+            // throw cRuntimeError("Error Flow id not found reserved");
+        }
+        if (it->port != -1)
+            portData[it->port].flowOcupation += it->used;
+        itCallInfo->second.outputFlows.erase(it);
+    }
+    else
+    {
+        FlowInfo flowInfo;
+        flowInfo.flowId = pk->getFlowId();
+        flowInfo.src = pk->getSrcAddr();
+        flowInfo.callId = pk->getCallId();
+        flowInfo.used = pk->getReserve();
+        flowInfo.port = 0;
+        flowInfo.portInput = 0;
+
+        auto itFlowInput = inputFlows.find(flowInfo);
+        auto itFlowOutput = outputFlows.find(flowInfo);
+
+        if (itFlowInput == inputFlows.end()) {
+            if (itFlowOutput != outputFlows.end())
+                throw cRuntimeError("In outputFlows but not in inputFlows");
+            else {
+                delete pk;
+                return false;
+            }
+        }
+
+        inputFlows.erase(itFlowInput);
+        if (itFlowOutput != outputFlows.end()) {
+            portData[itFlowOutput->port].flowOcupation += itFlowOutput->used;
+            outputFlows.erase(itFlowOutput);
+        }
+    }
     return true;
 }
 

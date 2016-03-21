@@ -99,11 +99,12 @@ private:
         uint64_t lastInfoNominal;
         LinkState portStatus = UP;
         bool overload = false;
-        std::set<FlowInfo> inputFlows; // flows not assigned to a call
-        std::set<FlowInfo> outputtFlows; // flows not assigned to a call
     };
 
-
+    // configuration parameters
+    bool flowsDiscard = true; // if true and the bandwidth is busy the flow is lost, if false, the flows share in proportional the bandwidth
+    double reserveCall = 0; // quantity that determine if flows not assigned to call must be accepted or not, 0 implies that they must accept it of possible, not reservation, 1 only accept call flows
+    double reserveFlows = 0; //similar to previous, but with the bandwidth used in the port
 
     //
     typedef std::map<int, int> RoutingTable; // destaddr -> gateindex
@@ -121,10 +122,11 @@ private:
 
     RoutingTable rtable;
 
-
     std::vector<PortData> portData;
 
     FlowInfoVector pendingFlows;
+    std::set<FlowInfo> inputFlows; // flows not assigned to a call
+    std::set<FlowInfo> outputFlows; // flows not assigned to a call
 
     NeighborsTable neighbors;
 

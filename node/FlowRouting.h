@@ -16,7 +16,7 @@ using namespace omnetpp;
 class FlowRouting : public cSimpleModule, public cListener
 {
 private:
-    int myAddress;
+
     enum LinkState
     {
         UP, DOWN
@@ -25,21 +25,15 @@ private:
     {
         UNKNOWN = -1, CALLUP, END
     };
-
-    struct NeighborsPorts
+// Structures used
+    struct NeighborsPorts // allows identify the port using the address.
     {
         int port;
         LinkState state;
         simtime_t failureTime;
     };
 
-    std::map<int, int> sourceIdGate;
-
-    typedef std::map<int, int> RoutingTable; // destaddr -> gateindex
-    typedef std::map<int, NeighborsPorts> NeighborsTable; // destaddr -> gateindex
-    typedef std::vector<uint64_t> Ocupation;
-    typedef std::map<int, uint64_t> SequenceTable;
-
+// Information flow
     struct FlowInfo
     {
         int src;
@@ -47,6 +41,7 @@ private:
         uint64_t callId;
         uint64_t used;
         int port;
+        int portInput;
         bool operator <(const FlowInfo& b) const
         {
             if (src == b.src) {
@@ -75,9 +70,10 @@ private:
         }
     };
 
+    // vector of flows used by a call
     typedef std::vector<FlowInfo> FlowInfoVector;
 
-
+    // call information
     struct CallInfo
     {
         int node1; // address origin of the call
@@ -93,18 +89,41 @@ private:
         FlowInfoVector outputFlows;
     };
 
+    // structure that contains the information related to a port, bandwidth, occupation, status ...
+    struct PortData
+    {
+        uint64_t occupation;
+        uint64_t nominalbw;
+        uint64_t flowOcupation;
+        uint64_t lastInfoOcupation;
+        uint64_t lastInfoNominal;
+        LinkState portStatus = UP;
+        bool overload = false;
+        std::set<FlowInfo> inputFlows; // flows not assigned to a call
+        std::set<FlowInfo> outputtFlows; // flows not assigned to a call
+    };
+
+
+
+    //
+    typedef std::map<int, int> RoutingTable; // destaddr -> gateindex
+    typedef std::map<int, NeighborsPorts> NeighborsTable; // destaddr -> gateindex
+    typedef std::map<int, uint64_t> SequenceTable;
     typedef std::map<uint64_t, CallInfo> CallInfoMap;
+
+    // variables and containers
+    int myAddress;
+
+    std::map<int, int> sourceIdGate;
     CallInfoMap callInfomap;
     SequenceTable sequenceTable;
     uint64_t seqnum = 0;
 
     RoutingTable rtable;
-    Ocupation ocupation;
-    Ocupation nominalbw;
-    Ocupation flowOcupation;
-    Ocupation lastInfoOcupation;
-    Ocupation lastInfoNominal;
-    std::vector<LinkState> portStatus;
+
+
+    std::vector<PortData> portData;
+
     FlowInfoVector pendingFlows;
 
     NeighborsTable neighbors;
@@ -132,6 +151,10 @@ private:
     virtual void checkPendingList();
     virtual void procActualize(Actualize *pkt);
     virtual void procBroadcast(Base *pkt);
+    virtual bool preProcPacket(Packet *);
+    virtual bool procStartFlow(Packet *, const int&, const int&);
+    virtual bool procEndFlow(Packet *);
+    virtual void postProc(Packet *, const int&, const int&, const int &);
 protected:
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;

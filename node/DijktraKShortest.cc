@@ -417,10 +417,8 @@ void DijkstraKshortest::run()
                     newElem.iD = current_edge->last_node();
                     newElem.idx = nextIdx;
                     newElem.cost = cost;
-                    for (auto it = heap.begin(); it != heap.end(); ++it)
-                    {
-                        if (it->iD == newElem.iD && it->idx == newElem.idx && it->cost > newElem.cost)
-                        {
+                    for (auto it = heap.begin(); it != heap.end(); ++it) {
+                        if (it->iD == newElem.iD && it->idx == newElem.idx && it->cost > newElem.cost) {
                             heap.erase(it);
                             break;
                         }
@@ -529,10 +527,8 @@ void DijkstraKshortest::runUntil(const NodeId &target)
                     newElem.idx = nextIdx;
                     newElem.cost = cost;
                     // erase
-                    for (auto it = heap.begin(); it != heap.end(); ++it)
-                    {
-                        if (it->iD == newElem.iD && it->idx == newElem.idx && it->cost > newElem.cost)
-                        {
+                    for (auto it = heap.begin(); it != heap.end(); ++it) {
+                        if (it->iD == newElem.iD && it->idx == newElem.idx && it->cost > newElem.cost) {
                             heap.erase(it);
                             break;
                         }

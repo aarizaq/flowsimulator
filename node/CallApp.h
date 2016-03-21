@@ -35,6 +35,7 @@ private:
 
     // state
     static uint64_t callIdentifier;
+    uint64_t flowIdentifier = 0;
     cMessage *generateCall = nullptr;
     long callCounter = 0;
     long callReceived = 0;

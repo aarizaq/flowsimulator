@@ -227,7 +227,6 @@ simtime_t failureModule::createEvent(LinkId nodeId, cXMLAttributeMap attributes,
     return timeEvent;
 }
 
-
 void failureModule::create(std::pair<int, int> nodeId, cXMLElement *element, int repeat)
 {
     simtime_t base;

@@ -413,6 +413,8 @@ void DijkstraFuzzy::runDisjoint(const NodeId &target)
     }
 
     if (!getRoute(target, minPath, cost)) {
+        return;
+        // grafo particionado, no hay camino.
         throw cRuntimeError("Imposible encontrar ruta");
     }
     // test
@@ -466,6 +468,7 @@ void DijkstraFuzzy::runDisjoint(const NodeId &target)
 
     FuzzyCost cost2;
     if (!getRoute(target, minPathD, routeMapdisj, cost2)) {
+        // grafo particionado, no se pueden quitar todos los enlaces.
         throw cRuntimeError("Imposible encontrar ruta");
     }
     if (minPathD.size() > 12)
@@ -927,10 +930,6 @@ void DijkstraFuzzy::Pair_Paths(const Route &S, const Route &Sp, BreaksVect &Vect
 
 }
 
-
-
-
-
 Dijkstra::State::State()
 {
     idPrev = UndefinedAddr;
@@ -949,15 +948,17 @@ Dijkstra::State::~State()
 
 }
 
-
-
-
 Dijkstra::Dijkstra()
 {
 
 }
 
 void Dijkstra::cleanLinkArray()
+{
+    cleanLinkArray(linkArray);
+}
+
+void Dijkstra::cleanLinkArray(LinkArray &linkArray)
 {
     for (auto it = linkArray.begin(); it != linkArray.end(); it++)
         while (!it->second.empty()) {
@@ -972,10 +973,7 @@ Dijkstra::~Dijkstra()
     cleanLinkArray();
 }
 
-
-
-
-void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost)
+void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost, LinkArray & linkArray)
 {
     auto it = linkArray.find(originNode);
     if (it != linkArray.end()) {
@@ -994,7 +992,7 @@ void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, doub
     linkArray[originNode].push_back(link);
 }
 
-void Dijkstra::deleteEdge(const NodeId & originNode, const NodeId & last_node)
+void Dijkstra::deleteEdge(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray)
 {
     auto it = linkArray.find(originNode);
     if (it != linkArray.end()) {
@@ -1010,94 +1008,37 @@ void Dijkstra::deleteEdge(const NodeId & originNode, const NodeId & last_node)
     }
 }
 
+void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost)
+{
+    addEdge(originNode, last_node, cost, linkArray);
+}
+
+void Dijkstra::deleteEdge(const NodeId & originNode, const NodeId & last_node)
+{
+    deleteEdge(originNode, last_node, linkArray);
+}
+
 void Dijkstra::setRoot(const NodeId & dest_node)
 {
     rootNode = dest_node;
-
 }
 
 void Dijkstra::run()
 {
-    std::multiset<SetElem> heap;
-    routeMap.clear();
-;
-
-    auto it = linkArray.find(rootNode);
-    if (it == linkArray.end())
-        throw cRuntimeError("Node not found");
-    State state(0);
-    state.label = perm;
-    routeMap[rootNode] = state;
-
-    SetElem elem;
-    elem.iD = rootNode;
-    elem.cost = 0;
-    heap.insert(elem);
-    while (!heap.empty()) {
-        SetElem elem = *heap.begin();
-        heap.erase(heap.begin());
-        auto it = routeMap.find(elem.iD);
-        if (it == routeMap.end())
-            throw cRuntimeError("node not found in routeMap");
-
-        if (elem.iD != rootNode) {
-            if (it->second.label == perm)
-                    continue; // nothing to do with this element
-        }
-
-        it->second.label = perm;
-
-        // next hop
-        auto linkIt = linkArray.find(elem.iD);
-        if (linkIt == linkArray.end())
-            throw cRuntimeError("Error link not found in linkArray");
-
-        for (unsigned int i = 0; i < linkIt->second.size(); i++) {
-            Edge *current_edge = (linkIt->second)[i];
-            double cost;
-            double maxCost = 1e30;
-
-
-            auto itNext = routeMap.find(current_edge->last_node());
-
-            cost = current_edge->cost +  it->second.cost;
-
-
-            if (itNext == routeMap.end()) {
-                State state;
-                state.idPrev = elem.iD;
-                state.cost = cost;
-                state.label = tent;
-                routeMap[current_edge->last_node()] = state;
-
-                SetElem newElem;
-                newElem.iD = current_edge->last_node();
-                newElem.cost = cost;
-                heap.insert(newElem);
-            }
-            else {
-                if (cost < maxCost) {
-                    itNext->second.cost = cost;
-                    itNext->second.idPrev = elem.iD;
-                    SetElem newElem;
-                    newElem.iD = current_edge->last_node();
-                    newElem.cost = cost;
-                    for (auto it = heap.begin(); it != heap.end(); ++it)
-                    {
-                        if (it->iD == newElem.iD && it->cost > newElem.cost)
-                        {
-                            heap.erase(it);
-                            break;
-                        }
-                    }
-                    heap.insert(newElem);
-                }
-            }
-        }
-    }
+    run(rootNode, linkArray, routeMap);
 }
 
 void Dijkstra::runUntil(const NodeId &target)
+{
+    runUntil(target, rootNode, linkArray, routeMap);
+}
+
+void Dijkstra::run(const int &rootNode, const LinkArray &linkArray, RouteMap &routeMap)
+{
+    runUntil(-1, rootNode, linkArray, routeMap);
+}
+
+void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArray &linkArray, RouteMap &routeMap)
 {
     std::multiset<SetElem> heap;
     routeMap.clear();
@@ -1123,11 +1064,11 @@ void Dijkstra::runUntil(const NodeId &target)
 
         if (elem.iD != rootNode) {
             if (it->second.label == perm)
-                    continue; // nothing to do with this element
+                continue; // nothing to do with this element
         }
         it->second.label = perm;
 
-        if ( target == elem.iD)
+        if (target == elem.iD)
             return;
         auto linkIt = linkArray.find(elem.iD);
         if (linkIt == linkArray.end())
@@ -1158,10 +1099,8 @@ void Dijkstra::runUntil(const NodeId &target)
                     SetElem newElem;
                     newElem.iD = current_edge->last_node();
                     newElem.cost = cost;
-                    for (auto it = heap.begin(); it != heap.end(); ++it)
-                    {
-                        if (it->iD == newElem.iD && it->cost > newElem.cost)
-                        {
+                    for (auto it = heap.begin(); it != heap.end(); ++it) {
+                        if (it->iD == newElem.iD && it->cost > newElem.cost) {
                             heap.erase(it);
                             break;
                         }
@@ -1173,8 +1112,7 @@ void Dijkstra::runUntil(const NodeId &target)
     }
 }
 
-
-bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode)
+bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, const RouteMap &routeMap)
 {
     auto it = routeMap.find(nodeId);
     if (it == routeMap.end())
@@ -1195,6 +1133,12 @@ bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode)
         path.pop_back();
     }
     return true;
+
+}
+
+bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode)
+{
+    return getRoute(nodeId, pathNode, routeMap);
 }
 
 void Dijkstra::setFromTopo(const cTopology *topo)
@@ -1212,14 +1156,82 @@ void Dijkstra::setFromTopo(const cTopology *topo)
     }
 }
 
-
 void Dijkstra::setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray & topo)
 {
     cleanLinkArray();
-    for (auto elem : topo)
-    {
+    for (auto elem : topo) {
         for (auto elem2 : elem.second)
             addEdge(elem.first, elem2->last_node(), 1);
 
     }
 }
+
+void Dijkstra::setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray & topo, LinkArray &linkArray)
+{
+    cleanLinkArray(linkArray);
+    for (auto elem : topo) {
+        for (auto elem2 : elem.second)
+            addEdge(elem.first, elem2->last_node(), 1, linkArray);
+
+    }
+}
+
+void Dijkstra::discoverPartitionedLinks(const LinkArray & topo, LinkArray &links)
+{
+    LinkArray topoAux = topo;
+    for (auto elem : topo) {
+        auto it = topoAux.find(elem.first);
+        for (auto elem2 : elem.second) {
+            Edge *tempEdge = elem2;
+            int origin = elem.first;
+            int nodeId = tempEdge->last_node();
+            for (auto itAux = it->second.begin(); itAux != it->second.end(); ++it) {
+                if ((*itAux)->last_node() == nodeId) {
+                    it->second.erase(itAux);
+                    break;
+                }
+            }
+            RouteMap routeMap;
+            runUntil(origin, nodeId, topoAux, routeMap);
+            std::vector<NodeId> pathNode;
+            bool has = getRoute(nodeId, pathNode, routeMap);
+            // include the link other time
+            it->second.push_back(tempEdge);
+            if (!has)
+                addEdge(origin, nodeId, 1, links);
+        }
+    }
+}
+
+void Dijkstra::discoverPartitionedLinks(std::vector<NodeId> &pathNode, const LinkArray & topo, LinkArray &links)
+{
+
+    LinkArray topoAux = topo;
+    for (int i = 0; i < pathNode.size() - 1; i++) {
+        auto it1 = topoAux.find(pathNode[i]);
+        if (it1 == topoAux.end())
+            throw cRuntimeError("Node not found %i", pathNode[i]);
+        auto it = topoAux.find(pathNode[i]);
+        Edge *tempEdge = nullptr;
+        int origin = it1->first;
+        int nodeId = pathNode[i + 1];
+        for (auto itAux = it->second.begin(); itAux != it->second.end(); ++it) {
+            if ((*itAux)->last_node() == pathNode[i + 1]) {
+                tempEdge = *itAux;
+                it->second.erase(itAux);
+                break;
+            }
+        }
+        if (tempEdge == nullptr)
+            throw cRuntimeError("Link not found %i - %i", pathNode[i], pathNode[i + 1]);
+        RouteMap routeMap;
+        runUntil(origin, nodeId, topoAux, routeMap);
+        std::vector<NodeId> pathNode;
+        bool has = getRoute(nodeId, pathNode, routeMap);
+        // include the link other time
+        it->second.push_back(tempEdge);
+        if (!has)
+            addEdge(origin, nodeId, 1, links);
+    }
+}
+

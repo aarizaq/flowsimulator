@@ -30,11 +30,7 @@ using namespace omnetpp;
 typedef int NodeId;
 #define InvalidId -1
 
-
 #define UndefinedAddr -1
-
-
-
 
 class DijkstraFuzzy
 {
@@ -123,6 +119,7 @@ protected:
     static double alpha;
 
     LinkArray linkArray;
+    LinkArray uniqueLink;
     RouteMap routeMap;
     NodeId rootNode;
     int K_LIMITE = 1;
@@ -216,7 +213,6 @@ inline bool operator >(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::F
     return false;
 }
 
-
 class Dijkstra
 {
 protected:
@@ -228,7 +224,7 @@ protected:
 public:
     typedef std::vector<NodeId> Route;
 protected:
-    typedef std::map<NodeId,Route> MapRoutes;
+    typedef std::map<NodeId, Route> MapRoutes;
 
     class SetElem
     {
@@ -248,8 +244,8 @@ protected:
         }
 
     };
-    friend bool operator < (const Dijkstra::SetElem& x, const Dijkstra::SetElem& y);
-    friend bool operator > (const Dijkstra::SetElem& x, const Dijkstra::SetElem& y);
+    friend bool operator <(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y);
+    friend bool operator >(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y);
     class State
     {
     public:
@@ -290,18 +286,30 @@ protected:
     RouteMap routeMap;
     NodeId rootNode;
 public:
+
     Dijkstra();
     virtual ~Dijkstra();
+    virtual void discoverPartitionedLinks(const LinkArray &, LinkArray &);
+    virtual void discoverPartitionedLinks(std::vector<NodeId> &pathNode, const LinkArray &, LinkArray &);
+
     virtual void setFromTopo(const cTopology *);
     virtual void setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray &);
+    virtual void setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray &, LinkArray &);
+
+    virtual void cleanLinkArray(LinkArray &);
+    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, LinkArray &);
+    virtual void deleteEdge(const NodeId &, const NodeId &, LinkArray &);
 
     virtual void cleanLinkArray();
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost);
     virtual void deleteEdge(const NodeId &, const NodeId &);
     virtual void setRoot(const NodeId & dest_node);
+    virtual void run(const int &, const LinkArray &, RouteMap &);
+    virtual void runUntil(const int &, const int &, const LinkArray &, RouteMap &);
     virtual void run();
     virtual void runUntil(const NodeId &);
     virtual bool getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode);
+    virtual bool getRoute(const NodeId &, std::vector<NodeId> &, const RouteMap &);
 };
 
 inline bool operator <(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)

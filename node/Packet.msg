@@ -29,10 +29,11 @@ enum PacketCode
     REJECTED = 4;        
     STARTFLOW = 5;
     ENDFLOW = 6;
-    ACTUALIZE = 7;
+    FLOWCHANGE = 7;
+    ACTUALIZE = 8;
     BREAK = 8;
-    RESTORE = 9;
-    RELEASEDELAYED = 10; // end a call
+    RESTORE = 10;
+    RELEASEDELAYED = 11; // end a call
 }
 
 

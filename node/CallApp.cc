@@ -12,13 +12,13 @@
 #include "CallApp.h"
 #include "Packet_m.h"
 
-uint64_t CallApp::callIdentifier = 0;
+uint64_t CallApp::callIdentifier = 1;
 
 Define_Module(CallApp);
 
 CallApp::CallApp()
 {
-    callIdentifier = 0;
+    callIdentifier = 1;
 }
 
 CallApp::~CallApp()
@@ -50,62 +50,62 @@ void CallApp::readTopo()
     cTopology topo("topo");
     topo.extractByNedTypeName(nedTypes);
 
-   /* DijkstraFuzzy test;
+    /* DijkstraFuzzy test;
 
-    // 0-1
-    test.addEdge(0, 1, 1, 1, 1);
-    test.addEdge(1, 0, 1, 1, 1);
+     // 0-1
+     test.addEdge(0, 1, 1, 1, 1);
+     test.addEdge(1, 0, 1, 1, 1);
 
-    // 0-4
-    test.addEdge(0, 4, 7, 8, 11);
-    test.addEdge(4, 0, 7, 8, 11);
+     // 0-4
+     test.addEdge(0, 4, 7, 8, 11);
+     test.addEdge(4, 0, 7, 8, 11);
 
-    // 0-5
-    test.addEdge(0, 5, 1, 1, 1);
-    test.addEdge(5, 0, 1, 1, 1);
+     // 0-5
+     test.addEdge(0, 5, 1, 1, 1);
+     test.addEdge(5, 0, 1, 1, 1);
 
-    // 1-2
-    test.addEdge(1, 2, 1, 2, 3);
-    test.addEdge(2, 1, 1, 2, 3);
+     // 1-2
+     test.addEdge(1, 2, 1, 2, 3);
+     test.addEdge(2, 1, 1, 2, 3);
 
-    // 1-5
-    test.addEdge(1, 5, 1, 1, 1);
-    test.addEdge(5, 1, 1, 1, 1);
-    // 1-6
-    test.addEdge(1, 6, 1, 2, 3);
-    test.addEdge(6, 1, 1, 2, 3);
+     // 1-5
+     test.addEdge(1, 5, 1, 1, 1);
+     test.addEdge(5, 1, 1, 1, 1);
+     // 1-6
+     test.addEdge(1, 6, 1, 2, 3);
+     test.addEdge(6, 1, 1, 2, 3);
 
-    // 2-3
-    test.addEdge(2, 3, 1, 2, 3);
-    test.addEdge(3, 2, 1, 2, 3);
+     // 2-3
+     test.addEdge(2, 3, 1, 2, 3);
+     test.addEdge(3, 2, 1, 2, 3);
 
-    // 2-4
-    test.addEdge(2, 4, 1, 1, 1);
-    test.addEdge(4, 2, 1, 1, 1);
+     // 2-4
+     test.addEdge(2, 4, 1, 1, 1);
+     test.addEdge(4, 2, 1, 1, 1);
 
-    // 3-6
-    test.addEdge(3, 6, 1, 2, 5);
-    test.addEdge(6, 3, 1, 2, 5);
+     // 3-6
+     test.addEdge(3, 6, 1, 2, 5);
+     test.addEdge(6, 3, 1, 2, 5);
 
-    // 3-7
-    test.addEdge(3, 7, 1, 1, 1);
-    test.addEdge(7, 3, 1, 1, 1);
+     // 3-7
+     test.addEdge(3, 7, 1, 1, 1);
+     test.addEdge(7, 3, 1, 1, 1);
 
-    // 7-4
-    test.addEdge(7, 4, 1, 2, 3);
-    test.addEdge(4, 7, 1, 2, 3);
+     // 7-4
+     test.addEdge(7, 4, 1, 2, 3);
+     test.addEdge(4, 7, 1, 2, 3);
 
-    // 5-6
-    test.addEdge(5, 6, 2, 4, 6);
-    test.addEdge(6, 5, 2, 4, 6);
+     // 5-6
+     test.addEdge(5, 6, 2, 4, 6);
+     test.addEdge(6, 5, 2, 4, 6);
 
-    // 6-7
-    test.addEdge(7, 6, 3, 4, 6);
-    test.addEdge(6, 7, 3, 4, 6);
+     // 6-7
+     test.addEdge(7, 6, 3, 4, 6);
+     test.addEdge(6, 7, 3, 4, 6);
 
-    test.setRoot(0);
-    test.runDisjoint(7);
-*/
+     test.setRoot(0);
+     test.runDisjoint(7);
+     */
     for (int i = 0; i < topo.getNumNodes(); i++) {
         cTopology::Node *node = topo.getNode(i);
         int address = node->getModule()->par("address");
@@ -170,7 +170,6 @@ void CallApp::initialize()
 
 void CallApp::handleMessage(cMessage *msg)
 {
-
     char pkname[40];
     if (msg == generateCall) {
         // Sending packet
@@ -186,7 +185,10 @@ void CallApp::handleMessage(cMessage *msg)
         pk->setReserve(callReserve->doubleValue());
         pk->setSrcAddr(myAddress);
         pk->setDestAddr(destAddress);
-        pk->setCallId(callIdentifier++);
+        pk->setCallId(callIdentifier);
+        callIdentifier++;
+        if (callIdentifier == 0) // 0 is reserved for flows not assigned to a call.
+            callIdentifier++;
         pk->setSourceId(par("sourceId"));
         pk->setDestinationId(par("destinationId"));
 
@@ -258,9 +260,8 @@ void CallApp::handleMessage(cMessage *msg)
                         pkFlow->setType(ENDFLOW);
                         delayAux = TimeOff->doubleValue();
 
-
                     }
-                    else if (elem.state  == OFF) {
+                    else if (elem.state == OFF) {
                         sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),
                                 callIdentifier, this->getIndex());
                         pkFlow->setName(pkname);

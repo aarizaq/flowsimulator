@@ -154,13 +154,15 @@ void CallApp::initialize()
     cStringTokenizer tokenizer(destAddressesPar);
     const char *token;
     while ((token = tokenizer.nextToken()) != NULL)
-        destAddresses.push_back(atoi(token));
-
-    if (destAddresses.size() == 0)
-        throw cRuntimeError("At least one address must be specified in the destAddresses parameter!");
+    {
+        int destAddr = atoi(token);
+        if (destAddr != myAddress)
+            destAddresses.push_back(atoi(token));
+    }
 
     generateCall = new cMessage("nextCall");
-    scheduleAt(callArrival->doubleValue(), generateCall);
+    if (!destAddresses.empty())
+        scheduleAt(callArrival->doubleValue(), generateCall);
     nextEvent = new cMessage("NewEvent");
     readTopo();
     RegisterMsg * msg = new RegisterMsg();
@@ -192,13 +194,15 @@ void CallApp::handleMessage(cMessage *msg)
         pk->setSourceId(par("sourceId"));
         pk->setDestinationId(par("destinationId"));
 
-        dijFuzzy->runDisjoint(destAddress);
+        // TODO: Include the source routing in the packet.
+        // dijFuzzy->runDisjoint(destAddress);
 
         // TODO : recall timer,
 
         send(pk, "out");
 
-        scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
+        if (!destAddresses.empty())
+            scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
         if (hasGUI())
             getParentModule()->bubble("Generating call..");
         rescheduleEvent();

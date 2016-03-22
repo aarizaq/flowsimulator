@@ -34,40 +34,59 @@ private:
     };
 
 // Information flow
+    class FlowIdentification
+    {
+        int _src;
+        uint64_t _flowId;
+        uint64_t _callId;
+    public:
+        int & src() {return _src;}
+        uint64_t & flowId() {return _flowId;}
+        uint64_t & callId() {return _callId;}
+
+        FlowIdentification & operator = (const FlowIdentification& b) {
+            _src = b._src;
+            _flowId = b._flowId;
+            _callId = b._callId;
+            return *this;
+        }
+
+        bool operator <(const FlowIdentification& b) const
+          {
+              if (_src == b._src) {
+                  if (_callId == b._callId)
+                      return _flowId < b._flowId;
+                  else
+                      return _callId < b._callId;
+              }
+              else
+                  return _src < b._src;
+          }
+          bool operator >(const FlowIdentification& b) const
+          {
+              if (_src == b._src) {
+                  if (_callId == b._callId)
+                      return _flowId > b._flowId;
+                  else
+                      return _callId > b._callId;
+              }
+              else
+                  return _src > b._src;
+          }
+          bool operator ==(const FlowIdentification& b) const
+          {
+              return (_src == b._src) && (_flowId == b._flowId) && (_callId == b._callId);
+          }
+    };
+
     struct FlowInfo
     {
-        int src;
-        uint64_t flowId;
-        uint64_t callId;
+        FlowIdentification identify;
         uint64_t used;
         int port;
         int portInput;
-        bool operator <(const FlowInfo& b) const
-        {
-            if (src == b.src) {
-                if (callId == b.callId)
-                    return flowId < b.flowId;
-                else
-                    return callId < b.callId;
-            }
-            else
-                return src < b.src;
-        }
-        bool operator >(const FlowInfo& b) const
-        {
-            if (src == b.src) {
-                if (callId == b.callId)
-                    return flowId > b.flowId;
-                else
-                    return callId > b.callId;
-            }
-            else
-                return src > b.src;
-        }
-        bool operator ==(const FlowInfo& b) const
-        {
-            return (src == b.src) && (flowId == b.flowId) && (callId == b.callId);
-        }
+        int dest;
+        std::vector<int> sourceRouting;
     };
 
     // vector of flows used by a call
@@ -111,6 +130,7 @@ private:
     typedef std::map<int, NeighborsPorts> NeighborsTable; // destaddr -> gateindex
     typedef std::map<int, uint64_t> SequenceTable;
     typedef std::map<uint64_t, CallInfo> CallInfoMap;
+    typedef std::map<FlowIdentification,FlowInfo> FlowInfoMap;
 
     // variables and containers
     int myAddress;
@@ -125,8 +145,8 @@ private:
     std::vector<PortData> portData;
 
     FlowInfoVector pendingFlows;
-    std::set<FlowInfo> inputFlows; // flows not assigned to a call
-    std::set<FlowInfo> outputFlows; // flows not assigned to a call
+    FlowInfoMap inputFlows; // flows not assigned to a call
+    FlowInfoMap outputFlows; // flows not assigned to a call
 
     NeighborsTable neighbors;
 
@@ -149,7 +169,8 @@ private:
 
     virtual bool actualize(Actualize * = nullptr);
     virtual void processLinkEvents(cObject *msg);
-    virtual void procReserve(Packet *msg, int&, int&);
+    virtual bool procReserve(Packet *msg, int&, int&);
+    virtual bool getForwarPortFreeFlow(Packet *msg, int&);
     virtual void checkPendingList();
     virtual void procActualize(Actualize *pkt);
     virtual void procBroadcast(Base *pkt);

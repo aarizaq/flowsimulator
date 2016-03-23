@@ -25,8 +25,10 @@ CallApp::~CallApp()
 {
     if (dijFuzzy)
         delete dijFuzzy;
-    cancelAndDelete(generateCall);
-    cancelAndDelete(nextEvent);
+    if (generateCall)
+        cancelAndDelete(generateCall);
+    if (nextEvent)
+        cancelAndDelete(nextEvent);
     while (!activeCalls.empty()) {
         delete activeCalls.begin()->second;
         activeCalls.erase(activeCalls.begin());
@@ -149,6 +151,8 @@ void CallApp::initialize()
     WATCH(callCounter);
     WATCH(callReceived);
     WATCH(myAddress);
+    WATCH_MAP(receivedBytes);
+    WATCH_MAP(sendBytes);
 
     const char *destAddressesPar = par("destAddresses");
     cStringTokenizer tokenizer(destAddressesPar);
@@ -418,6 +422,7 @@ void CallApp::handleMessage(cMessage *msg)
         else
             itAccRec->second += it->second->acumulateRec;
         delete it->second;
+        activeCalls.erase(it);
 
         if (pk->isSelfMessage())
             send(pk, "out");

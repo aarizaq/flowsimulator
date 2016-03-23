@@ -86,6 +86,7 @@ private:
         int port;
         int portInput;
         int dest;
+        int destId;
         std::vector<int> sourceRouting;
     };
 
@@ -102,7 +103,8 @@ private:
         // inverse flows destination --> source
         int port1; // forwarding direct flows-receiving inverse flows
         int port2; // forwarding inverse flows-receiving direct flows
-        int applicationId = -1;
+        int applicationId1 = -1;
+        int applicationId2 = -1;
         CallState state = UNKNOWN;
         FlowInfoVector inputFlows;
         FlowInfoVector outputFlows;
@@ -136,6 +138,7 @@ private:
     int myAddress;
 
     std::map<int, int> sourceIdGate;
+    std::map<int, int> inverseSourceIdGate;
     CallInfoMap callInfomap;
     SequenceTable sequenceTable;
     uint64_t seqnum = 0;

@@ -141,6 +141,20 @@ bool FlowRouting::actualize(Actualize *other)
     return true;
 }
 
+void FlowRouting::modifyFlowBandwithFinite(const FlowInfo &flow)
+{
+    throw cRuntimeError("Mode not implemented yet");
+    int callId = const_cast<FlowInfo *>(&flow)->identify.callId();
+    int port = flow.port;
+    int intputPort = flow.portInput;
+
+    std::vector<CallInfo *> list;
+    for (auto it = callInfomap.begin(); it != callInfomap.end();++it) {
+        if (it->second.port1 == port || it->second.port2 == port)
+            list.push_back(&(it->second));
+    }
+}
+
 void FlowRouting::procBroadcast(Base *pkbase)
 {
     // arrival gate index
@@ -982,27 +996,31 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
         }
     }
 
-    // consume the bandwidth
-    if (flowsDiscard) {
-        if (portForward != -1) {
-            if (portData[portForward].flowOcupation > pk->getReserve()) {
-                portData[portForward].flowOcupation -= pk->getReserve();
-                if (itCallInfo != callInfomap.end())
-                    itCallInfo->second.outputFlows.push_back(flowInfo);
-                else
-                    outputFlows[flowId] = flowInfo;
-            }
-            else // flow lost, include in pending flows.
-            {
-                pendingFlows.push_back(flowInfo);
-                delete pk;
-                return false;
+    // consume bandwidth
+    if (portForward != -1) {
+        if (portData[portForward].flowOcupation > pk->getReserve()) {
+            portData[portForward].flowOcupation -= pk->getReserve();
+            if (itCallInfo != callInfomap.end())
+                itCallInfo->second.outputFlows.push_back(flowInfo);
+            else
+                outputFlows[flowId] = flowInfo;
+        }
+        else {
+            switch (flowAdmisionMode) {
+                case DISCARD:
+                    pendingFlows.push_back(flowInfo);
+                    delete pk;
+                    return false;
+                    break;
+                case FINITEQUEUE:
+                    modifyFlowBandwithFinite(flowInfo);
+                    break;
+                case INFINITEQUEUE:
+                default:
+                    // TODO: implementar el share mode
+                    throw cRuntimeError("Mode share not implemented yet", portInput);
             }
         }
-    }
-    else {
-        // TODO: implementar el share mode
-        throw cRuntimeError("Mode share not implemented yet", portInput);
     }
     return true;
 }

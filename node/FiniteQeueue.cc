@@ -34,33 +34,40 @@ bool FiniteQeueue::startShare(std::vector<FlowInfo *> &listOut, std::vector<Flow
     }
     if (request < bw)
         return false; // nothing to do
-    double p = (double)bw / (double)request;
+    double p = (double) bw / (double) request;
+    if (p<1)
+        p = 1.0;
     for (auto elem : listIn) {
         auto it = listOut.begin();
         while (it != listOut.end()) {
-            if ((*it)->identify == elem->identify)break;
+            if ((*it)->identify == elem->identify)
+                break;
             ++it;
-          }
+        }
         if (it != listOut.end())
             (*it)->used = elem->used * p;
     }
     return true;
 }
 
-bool FiniteQeueue::endShare( std::vector<FlowInfo *> &listOut, std::vector<FlowInfo *> &listIn, const uint64_t &bw)
+bool FiniteQeueue::endShare(std::vector<FlowInfo *> &listOut, std::vector<FlowInfo *> &listIn, const uint64_t &bw)
 {
     uint64_t request = 0;
     for (auto elem : listIn) {
         request += elem->used;
     }
-    double p = (double)bw / (double)request;
+
+    double p = (double) bw / (double) request;
+    if ( bw >= request)
+        p = 1.0;
     for (auto elem : listIn) {
         auto it = listOut.begin();
         while (it != listOut.end()) {
-            if ((*it)->identify == elem->identify)break;
+            if ((*it)->identify == elem->identify)
+                break;
             ++it;
-          }
+        }
         (*it)->used = elem->used * p;
     }
-    return true;
+    return  bw >= request;
 }

@@ -90,6 +90,10 @@ void FlowRouting::initialize()
     delete topo;
     localOutSize = this->gateSize("localOut");
 
+    const char *flowClass = par("flowClass").stringValue();
+    if (!strcmp(flowClass, ""))
+        flowDist = check_and_cast<BaseFlowDistirbution*>(createOne(flowClass));
+
     actualizeTimer = new cMessage("actualize timer");
     scheduleAt(simTime(), actualizeTimer);
 }
@@ -141,17 +145,34 @@ bool FlowRouting::actualize(Actualize *other)
     return true;
 }
 
-void FlowRouting::modifyFlowBandwithFinite(const FlowInfo &flow)
+
+void FlowRouting::getListFlowsToModifyStartFlow(const int &port,  std::vector<FlowInfo *> &listFlows,  std::vector<FlowInfo *> &listFlowsInput)
 {
     throw cRuntimeError("Mode not implemented yet");
-    int callId = const_cast<FlowInfo *>(&flow)->identify.callId();
-    int port = flow.port;
-    int intputPort = flow.portInput;
 
-    std::vector<CallInfo *> list;
-    for (auto it = callInfomap.begin(); it != callInfomap.end();++it) {
-        if (it->second.port1 == port || it->second.port2 == port)
-            list.push_back(&(it->second));
+    for (auto it = callInfomap.begin(); it != callInfomap.end(); ++it) {
+        if (it->second.port1 == port || it->second.port2 == port) {
+            for (unsigned int i = 0; i < it->second.outputFlows.size(); i++) {
+                if (it->second.outputFlows[i].port == port) {
+                    listFlows.push_back(&(it->second.outputFlows[i]));
+                }
+                auto itAux = std::find(it->second.inputFlows.begin(), it->second.inputFlows.end(),
+                        it->second.outputFlows[i]);
+                if (itAux == it->second.inputFlows.end())
+                    throw cRuntimeError("Flow in output list but not in input list of the call");
+                listFlowsInput.push_back(&(*itAux));
+            }
+        }
+    }
+
+    for (auto it = outputFlows.begin(); it != outputFlows.end();++it) {
+        if (it->second.port== port ) {
+            listFlows.push_back(&(it->second));
+            auto itAux = inputFlows.find(it->first);
+            if (itAux == inputFlows.end())
+                throw cRuntimeError("Flow in output list but not in input list, free flow");
+            listFlowsInput.push_back(&(itAux->second));
+        }
     }
 }
 
@@ -1006,19 +1027,35 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                 outputFlows[flowId] = flowInfo;
         }
         else {
+
+
+
             switch (flowAdmisionMode) {
                 case DISCARD:
                     pendingFlows.push_back(flowInfo);
                     delete pk;
                     return false;
                     break;
-                case FINITEQUEUE:
-                    modifyFlowBandwithFinite(flowInfo);
-                    break;
-                case INFINITEQUEUE:
                 default:
                     // TODO: implementar el share mode
                     throw cRuntimeError("Mode share not implemented yet", portInput);
+                    if (itCallInfo != callInfomap.end())
+                        itCallInfo->second.outputFlows.push_back(flowInfo);
+                    else
+                        outputFlows[flowId] = flowInfo;
+                    std::vector<FlowInfo *> listFlowsToModify;
+                    std::vector<FlowInfo *> listFlowsToModifyInput;
+                    getListFlowsToModifyStartFlow(flowInfo.port, listFlowsToModify,listFlowsToModifyInput);
+                    if (flowDist != nullptr)
+                        if (flowDist->startShare(listFlowsToModify,listFlowsToModifyInput,portData[portForward].nominalbw)) {
+                            uint64_t oc = 0;
+                            for (auto elem : listFlowsToModify)
+                                oc += elem->used;
+                            portData[portForward].flowOcupation = portData[portForward].nominalbw - oc;
+                            portData[portForward].overload = true;
+                        }
+                    else
+                        throw cRuntimeError("Not definition ", portInput);
             }
         }
     }

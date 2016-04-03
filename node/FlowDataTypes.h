@@ -12,6 +12,7 @@ enum LinkState
 {
     UP, DOWN
 };
+
 enum CallState
 {
     UNKNOWN = -1, CALLUP, END
@@ -23,7 +24,6 @@ enum FlowAdmisionModes
     FINITEQUEUE, // the bandwidth is shared between the nodes
     INFINITEQUEUE
 };
-
 
 // Structures used
 struct NeighborsPorts // allows identify the port using the address.
@@ -98,6 +98,19 @@ struct FlowInfo
     int dest;
     int destId;
     std::vector<int> sourceRouting;
+
+    bool operator <(const FlowInfo& b) const
+    {
+        return identify < b.identify;
+    }
+    bool operator >(const FlowInfo& b) const
+    {
+        return identify > b.identify;
+    }
+    bool operator ==(const FlowInfo& b) const
+    {
+        return identify == b.identify;
+    }
 };
 
 // vector of flows used by a call

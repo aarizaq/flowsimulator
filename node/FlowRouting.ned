@@ -18,6 +18,7 @@ simple FlowRouting
         volatile double actualizeState @unit(s)= default(60s+uniform(-0.1s,0.1s));
         volatile double breakRelease  @unit(s)= default(0);
         double minimumTimeActualize @unit(s) = default(10s); // minimum time between two actualization messages
+        string flowClass = default("");
         @display("i=block/switch");
         @signal[drop](type="long");
         @signal[outputIf](type="long");

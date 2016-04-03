@@ -9,6 +9,8 @@
 #include "DijktraKShortest.h"
 #include "FlowDataTypes.h"
 
+#include "BaseFlowDistirbution.h"
+
 using namespace omnetpp;
 
 /**
@@ -62,12 +64,14 @@ private:
 
     bool inmediateNotificationLink = false;
 
+    BaseFlowDistirbution * flowDist = nullptr;
+
     ~FlowRouting();
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *) override;
 
     virtual bool actualize(Actualize * = nullptr);
     virtual void processLinkEvents(cObject *msg);
-    virtual void modifyFlowBandwithFinite(const FlowInfo &flow);
+    virtual void getListFlowsToModifyStartFlow(const int &, std::vector<FlowInfo *> &, std::vector<FlowInfo *> &);
     virtual bool procReserve(Packet *msg, int&, int&);
     virtual bool getForwarPortFreeFlow(Packet *msg, int&);
     virtual void checkPendingList();

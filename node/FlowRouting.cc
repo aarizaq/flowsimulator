@@ -1046,16 +1046,34 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                     std::vector<FlowInfo *> listFlowsToModify;
                     std::vector<FlowInfo *> listFlowsToModifyInput;
                     getListFlowsToModifyStartFlow(flowInfo.port, listFlowsToModify,listFlowsToModifyInput);
-                    if (flowDist != nullptr)
+                    if (flowDist != nullptr) {
                         if (flowDist->startShare(listFlowsToModify,listFlowsToModifyInput,portData[portForward].nominalbw)) {
                             uint64_t oc = 0;
                             for (auto elem : listFlowsToModify)
                                 oc += elem->used;
                             portData[portForward].flowOcupation = portData[portForward].nominalbw - oc;
                             portData[portForward].overload = true;
+                            // enviar mensajes de actualización del flujo.
+                            for (auto itAux = listFlowsToModify.begin();itAux != listFlowsToModify.end(); ++itAux) {
+                                //
+                                Packet * pkt = Packet();
+                                pkt->setSrcAddr((*itAux)->identify.src());
+                                pkt->setCallId((*itAux)->identify.callId());
+                                pkt->setFlowId((*itAux)->identify.flowId());
+                                pkt->setDestAddr((*itAux)->destId);
+                                pkt->setReserve((*itAux)->used);
+                                pkt->setType(FLOWCHANGE);
+                                if (!(*itAux)->sourceRouting.empty()) {
+                                    pkt->setRouteArraySize((*itAux)->sourceRouting.size());
+                                    for (unsigned int i = 0; i < (*itAux)->sourceRouting.size(); i++)
+                                        pkt->setRoute(i, (*itAux)->sourceRouting[i]);
+                                }
+                                send(pkt, "out", portForward);
+                            }
                         }
+                    }
                     else
-                        throw cRuntimeError("Not definition ", portInput);
+                        throw cRuntimeError("Not definition present \"flowClass\": %s", par("flowClass").stringValue());
             }
         }
     }

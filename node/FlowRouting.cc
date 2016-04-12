@@ -148,8 +148,6 @@ bool FlowRouting::actualize(Actualize *other)
 
 void FlowRouting::getListFlowsToModifyStartFlow(const int &port,  std::vector<FlowInfo *> &listFlows,  std::vector<FlowInfo *> &listFlowsInput)
 {
-    throw cRuntimeError("Mode not implemented yet");
-
     for (auto it = callInfomap.begin(); it != callInfomap.end(); ++it) {
         if (it->second.port1 == port || it->second.port2 == port) {
             for (unsigned int i = 0; i < it->second.outputFlows.size(); i++) {
@@ -584,11 +582,22 @@ void FlowRouting::processLinkEvents(cObject *obj)
                 itNeig->second.state = UP;
                 portData[itNeig->second.port].portStatus = UP;
 
-                // TODO: Gestionar microcortes
-                // al terminar las llamadas debería estar el ancho de banda disponible ya que no se gestionan microcortes
+                std::vector<FlowInfo *> listFlowsToModify;
+                std::vector<FlowInfo *> listFlowsToModifyInput;
+                getListFlowsToModifyStartFlow(itNeig->second.port, listFlowsToModify,listFlowsToModifyInput);
+
                 if (portData[itNeig->second.port].occupation != portData[itNeig->second.port].nominalbw)
                     throw cRuntimeError("Restore link, ocupation %llu nominal %llu",
                             portData[itNeig->second.port].occupation, portData[itNeig->second.port].nominalbw);
+
+                if (!listFlowsToModifyInput.empty()) {
+                    // TODO: Gestionar microcortes
+                    // al terminar las llamadas debería estar el ancho de banda disponible ya que no se gestionan microcortes
+                    if (!listFlowsToModify.empty()) // error
+                        throw cRuntimeError("List of output flows should be empty if is a failure");
+
+
+                }
                 // if (simTime() - itNeig->second.failureTime > par("breakRelease"))
                 //     ocupation[itNeig->second.port] = nominalbw[itNeig->second.port];
                 if (inmediateNotificationLink)
@@ -1027,9 +1036,6 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                 outputFlows[flowId] = flowInfo;
         }
         else {
-
-
-
             switch (flowAdmisionMode) {
                 case DISCARD:
                     pendingFlows.push_back(flowInfo);
@@ -1056,7 +1062,231 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                             // enviar mensajes de actualización del flujo.
                             for (auto itAux = listFlowsToModify.begin();itAux != listFlowsToModify.end(); ++itAux) {
                                 //
-                                Packet * pkt = Packet();
+                                if ((*itAux)->identify == flowInfo.identify)
+                                {
+                                    // actualize use in the packet
+                                    pk->setReserve((*itAux)->used);
+                                    continue;
+                                }
+                                Packet * pkt = new Packet();
+                                pkt->setSrcAddr((*itAux)->identify.src());
+                                pkt->setCallId((*itAux)->identify.callId());
+                                pkt->setFlowId((*itAux)->identify.flowId());
+                                pkt->setDestAddr((*itAux)->destId);
+                                pkt->setReserve((*itAux)->used);
+                                pkt->setType(FLOWCHANGE);
+                                if (!(*itAux)->sourceRouting.empty()) {
+                                    pkt->setRouteArraySize((*itAux)->sourceRouting.size());
+                                    for (unsigned int i = 0; i < (*itAux)->sourceRouting.size(); i++)
+                                        pkt->setRoute(i, (*itAux)->sourceRouting[i]);
+                                }
+                                send(pkt, "out", portForward);
+                            }
+                        }
+                    }
+                    else
+                        throw cRuntimeError("Not definition present \"flowClass\": %s", par("flowClass").stringValue());
+            }
+        }
+    }
+    return true;
+}
+
+
+bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int & portInput)
+{
+    bool isCallOriented = (pk->getCallId() > 0);
+    auto itCallInfo = callInfomap.end();
+    if (isCallOriented) {
+        itCallInfo = callInfomap.find(pk->getCallId());
+        // flow
+        if (itCallInfo == callInfomap.end() || itCallInfo->second.state != CALLUP) { // call not established yet, delete flow
+            delete pk;
+            return false;
+        }
+    }
+
+
+    FlowIdentification flowId;
+
+    flowId.flowId() = pk->getFlowId();
+    flowId.src() = pk->getSrcAddr();
+    flowId.callId() = pk->getCallId();
+
+    FlowInfo flowInfo;
+    flowInfo.identify = flowId;
+    flowInfo.dest = pk->getDestAddr(); // call flows doesn't use, only independent flows use
+    flowInfo.used = pk->getReserve();
+    flowInfo.port = portForward;
+    flowInfo.portInput = portInput;
+    if (!isCallOriented)
+        flowInfo.destId = pk->getDestinationId();
+    else
+        flowInfo.destId = -1;
+
+    // is a flow change, check if the flow exist in the input list
+    FlowInfo *flowInfoInputPtr = nullptr;
+    if (isCallOriented) {
+        auto it = std::find(itCallInfo->second.inputFlows.begin(),itCallInfo->second.inputFlows.end(),flowInfo);
+        if (it == itCallInfo->second.inputFlows.end()) {
+            delete pk;
+            return false;
+        }
+        else if (it->used == pk->getReserve()) { // no change, nothing to do
+            delete pk;
+            return false;
+        }
+        else
+            flowInfoInputPtr = &(*it);
+    }
+    else {
+        auto itFlow = inputFlows.find(flowId);
+        if (itFlow == inputFlows.end()) {
+            delete pk;
+            return false;
+        }
+        else if (itFlow->second.used == pk->getReserve()) { // no change, nothing to do
+            delete pk;
+            return false;
+        }
+        else
+            flowInfoInputPtr = &(itFlow->second);
+    }
+
+    // the flow exist and there is a change in the used bandwidth
+    flowInfoInputPtr->used =  pk->getReserve();
+
+    // check if exists this flow, if it exists in the output
+
+    FlowInfo *flowInfoOutputPtr = nullptr;
+    if (isCallOriented) {
+        auto it = std::find(itCallInfo->second.outputFlows.begin(),itCallInfo->second.outputFlows.end(),flowInfo);
+        if (it != itCallInfo->second.outputFlows.end())
+            flowInfoOutputPtr = &(*it);
+    }
+    else {
+        auto itFlow = outputFlows.find(flowId);
+        if (itFlow != outputFlows.end())
+            flowInfoOutputPtr = &(itFlow->second);
+    }
+
+    if (flowInfoOutputPtr && flowInfoOutputPtr->used == pk->getReserve()) {
+        delete pk;
+        return false;
+    }
+
+
+
+
+    // check if port is up and if there is enough bandwidth unreserved for not oriented flows.
+    if (portForward != -1) {
+
+        if (portData[portForward].portStatus == DOWN) {
+            delete pk;
+            return false;
+        }
+
+        // free the used bandwidth
+        if (flowInfoOutputPtr)
+            portData[portForward].flowOcupation += flowInfoOutputPtr->used;
+
+        // limits for not oriented flows
+        if (!isCallOriented) {
+            double limitcall = (double) portData[portForward].nominalbw * reserveCall;
+            if (limitcall > 0 && limitcall <= (double) portData[portForward].occupation) {
+                delete pk;
+                return false;
+            }
+            double limitflow = (double) portData[portForward].nominalbw * reserveFlows;
+            if (limitflow > 0 && limitflow <= (double) portData[portForward].flowOcupation) {
+                delete pk;
+                return false;
+            }
+        }
+    }
+
+    // consume bandwidth
+    if (portForward != -1) {
+        if (portData[portForward].flowOcupation > pk->getReserve()) {
+            portData[portForward].flowOcupation -= pk->getReserve();
+            if (flowInfoOutputPtr != nullptr)
+            {
+                flowInfoOutputPtr->used = pk->getReserve();
+            }
+            else
+            {
+                if (itCallInfo != callInfomap.end())
+                    itCallInfo->second.outputFlows.push_back(*flowInfoInputPtr);
+                else
+                    outputFlows[flowId] = *flowInfoInputPtr;
+            }
+        }
+        else {
+            switch (flowAdmisionMode) {
+                case DISCARD:
+                    pendingFlows.push_back(*flowInfoInputPtr);
+                    // delete the output flow if exist and send end flow
+                    if (flowInfoOutputPtr != nullptr) {
+                        if (itCallInfo != callInfomap.end()) {
+                            auto it = std::find(itCallInfo->second.outputFlows.begin(),itCallInfo->second.outputFlows.end(),flowInfo);
+                            itCallInfo->second.outputFlows.erase(it);
+                        }
+                        else {
+                            auto itFlow = outputFlows.find(flowId);
+                            outputFlows.erase(itFlow);
+                        }
+                        // send end flow
+                        Packet * pkt = new Packet();
+                        pkt->setSrcAddr(flowInfoInputPtr->identify.src());
+                        pkt->setCallId(flowInfoInputPtr->identify.callId());
+                        pkt->setFlowId(flowInfoInputPtr->identify.flowId());
+                        pkt->setDestAddr(flowInfoInputPtr->destId);
+                        pkt->setReserve(flowInfoInputPtr->used);
+                        pkt->setType(ENDFLOW);
+                        if (!(flowInfoInputPtr->sourceRouting.empty())) {
+                            pkt->setRouteArraySize(flowInfoInputPtr->sourceRouting.size());
+                            for (unsigned int i = 0; i < flowInfoInputPtr->sourceRouting.size(); i++)
+                                pkt->setRoute(i, flowInfoInputPtr->sourceRouting[i]);
+                        }
+                        send(pkt, "out", portForward);
+                    }
+                    flowInfoOutputPtr = nullptr;
+                    delete pk;
+                    return false;
+                    break;
+                default:
+                    // TODO: implementar el share mode
+                    if (flowInfoOutputPtr == nullptr)
+                    {
+                        if (itCallInfo != callInfomap.end() && flowInfoOutputPtr == nullptr)
+                            itCallInfo->second.outputFlows.push_back(*flowInfoInputPtr);
+                        else
+                            outputFlows[flowId] = *flowInfoInputPtr;
+                    }
+                    else {
+                        flowInfoOutputPtr->used = pk->getReserve();
+                    }
+
+                    std::vector<FlowInfo *> listFlowsToModify;
+                    std::vector<FlowInfo *> listFlowsToModifyInput;
+                    getListFlowsToModifyStartFlow(flowInfo.port, listFlowsToModify,listFlowsToModifyInput);
+                    if (flowDist != nullptr) {
+                        if (flowDist->startShare(listFlowsToModify,listFlowsToModifyInput,portData[portForward].nominalbw)) {
+                            uint64_t oc = 0;
+                            for (auto elem : listFlowsToModify)
+                                oc += elem->used;
+                            portData[portForward].flowOcupation = portData[portForward].nominalbw - oc;
+                            portData[portForward].overload = true;
+                            // enviar mensajes de actualización del flujo.
+                            for (auto itAux = listFlowsToModify.begin();itAux != listFlowsToModify.end(); ++itAux) {
+                                //
+                                if ((*itAux)->identify == flowInfo.identify)
+                                {
+                                    // actualize use in the packet
+                                    pk->setReserve((*itAux)->used);
+                                    continue;
+                                }
+                                Packet * pkt = new Packet();
                                 pkt->setSrcAddr((*itAux)->identify.src());
                                 pkt->setCallId((*itAux)->identify.callId());
                                 pkt->setFlowId((*itAux)->identify.flowId());
@@ -1322,6 +1552,10 @@ void FlowRouting::handleMessage(cMessage *msg)
         }
         else if (pk->getType() == STARTFLOW) {
             if (!procStartFlow(pk, portForward, portInput))
+                return; // nothing more to do
+        }
+        else if (pk->getType() == FLOWCHANGE) {
+            if (!procFlowChange(pk, portForward, portInput))
                 return; // nothing more to do
         }
         else if (pk->getType() == ENDFLOW) {

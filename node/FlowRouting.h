@@ -79,6 +79,7 @@ private:
     virtual void procBroadcast(Base *pkt);
     virtual bool preProcPacket(Packet *);
     virtual bool procStartFlow(Packet *, const int&, const int&);
+    virtual bool procFlowChange(Packet *, const int&, const int&);
     virtual bool procEndFlow(Packet *);
     virtual void postProc(Packet *, const int&, const int&, const int &);
 protected:

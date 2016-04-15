@@ -8,6 +8,7 @@
 #ifndef FLOWDATATYPES_H_
 #define FLOWDATATYPES_H_
 
+#include <omnetpp.h>
 enum LinkState
 {
     UP, DOWN
@@ -30,7 +31,7 @@ struct NeighborsPorts // allows identify the port using the address.
 {
     int port;
     LinkState state;
-    simtime_t failureTime;
+    omnetpp::simtime_t failureTime;
 };
 
 // Information flow
@@ -39,7 +40,13 @@ class FlowIdentification
     int _src;
     uint64_t _flowId;
     uint64_t _callId;
+    int _srcId = 0;
 public:
+    int & srcId()
+    {
+        return _srcId;
+    }
+
     int & src()
     {
         return _src;
@@ -58,11 +65,14 @@ public:
         _src = b._src;
         _flowId = b._flowId;
         _callId = b._callId;
+        _srcId = b._srcId;
         return *this;
     }
 
     bool operator <(const FlowIdentification& b) const
     {
+        if (_srcId != b._srcId)
+            return _srcId < b._srcId;
         if (_src == b._src) {
             if (_callId == b._callId)
                 return _flowId < b._flowId;
@@ -72,8 +82,12 @@ public:
         else
             return _src < b._src;
     }
+
     bool operator >(const FlowIdentification& b) const
     {
+        if (_srcId != b._srcId)
+            return _srcId > b._srcId;
+
         if (_src == b._src) {
             if (_callId == b._callId)
                 return _flowId > b._flowId;
@@ -85,7 +99,7 @@ public:
     }
     bool operator ==(const FlowIdentification& b) const
     {
-        return (_src == b._src) && (_flowId == b._flowId) && (_callId == b._callId);
+        return (_src == b._src) && (_flowId == b._flowId) && (_callId == b._callId) && (_srcId == b._srcId);
     }
 };
 

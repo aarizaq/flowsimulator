@@ -340,6 +340,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                                     pkt->setType(ENDFLOW);
                                     pkt->setFlowId(elem2.identify.flowId());
                                     pkt->setSrcAddr(elem2.identify.src());
+                                    pkt->setSourceId(elem2.identify.srcId());
                                     pkt->setDestAddr(myAddress);
 
                                     if (elem.second.node1 == myAddress)
@@ -389,6 +390,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                             pkt->setType(ENDFLOW);
                             pkt->setFlowId(elem.second.identify.flowId());
                             pkt->setSrcAddr(elem.second.identify.src());
+                            pkt->setSourceId(elem.second.identify.srcId());
                             pkt->setDestAddr(myAddress);
                             pkt->setDestinationId(elem.second.destId);
                             auto it = sourceIdGate.find(pkt->getDestinationId());
@@ -444,6 +446,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                                 pkt->setType(ENDFLOW);
                                 pkt->setFlowId(flowinfo.identify.flowId());
                                 pkt->setSrcAddr(flowinfo.identify.src());
+                                pkt->setSourceId(flowinfo.identify.srcId());
                                 if (itCallInfo->second.node1 == flowinfo.identify.src())
                                     pkt->setDestAddr(itCallInfo->second.node2);
                                 else
@@ -531,6 +534,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                         pkt->setType(ENDFLOW);
                         pkt->setFlowId(it->second.identify.flowId());
                         pkt->setSrcAddr(it->second.identify.src());
+                        pkt->setSourceId(it->second.identify.srcId());
                         pkt->setDestAddr(myAddress);
                         pkt->setDestinationId(it->second.destId);
                         auto itAux = sourceIdGate.find(pkt->getDestinationId());
@@ -564,6 +568,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                         pkt->setType(ENDFLOW);
                         pkt->setFlowId(it->second.identify.flowId());
                         pkt->setSrcAddr(it->second.identify.src());
+                        pkt->setSourceId(it->second.identify.srcId());
                         pkt->setDestAddr(it->second.dest);
                         pkt->setDestinationId(it->second.destId);
                         send(pkt, "out", it->second.port);
@@ -826,6 +831,8 @@ void FlowRouting::checkPendingList()
                 }
                 pkStartFlow->setCallId(it->identify.callId());
                 pkStartFlow->setFlowId(it->identify.flowId());
+                pkStartFlow->setSourceId(it->identify.srcId());
+                pkStartFlow->setDestinationId(it->destId);
                 pkStartFlow->setType(STARTFLOW);
                 pkStartFlow->setReserve(it->used);
                 send(pkStartFlow, "out", it->port);
@@ -928,6 +935,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
             flowId.flowId() = pk->getFlowId();
             flowId.src() = pk->getSrcAddr();
             flowId.callId() = pk->getCallId();
+            flowId.srcId() = pk->getSourceId();
             auto itFlow = inputFlows.find(flowId);
             if (itFlow == inputFlows.end()) {
                 delete pk;
@@ -957,6 +965,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
     flowId.flowId() = pk->getFlowId();
     flowId.src() = pk->getSrcAddr();
     flowId.callId() = pk->getCallId();
+    flowId.srcId() = pk->getSourceId();
 
     FlowInfo flowInfo;
     flowInfo.identify = flowId;
@@ -1072,6 +1081,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                                 pkt->setSrcAddr((*itAux)->identify.src());
                                 pkt->setCallId((*itAux)->identify.callId());
                                 pkt->setFlowId((*itAux)->identify.flowId());
+                                pkt->setSourceId((*itAux)->identify.srcId());
                                 pkt->setDestAddr((*itAux)->destId);
                                 pkt->setReserve((*itAux)->used);
                                 pkt->setType(FLOWCHANGE);
@@ -1112,6 +1122,7 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
     flowId.flowId() = pk->getFlowId();
     flowId.src() = pk->getSrcAddr();
     flowId.callId() = pk->getCallId();
+    flowId.srcId() = pk->getSourceId();
 
     FlowInfo flowInfo;
     flowInfo.identify = flowId;
@@ -1240,6 +1251,7 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
                         pkt->setSrcAddr(flowInfoInputPtr->identify.src());
                         pkt->setCallId(flowInfoInputPtr->identify.callId());
                         pkt->setFlowId(flowInfoInputPtr->identify.flowId());
+                        pkt->setSourceId(flowInfoInputPtr->identify.srcId());
                         pkt->setDestAddr(flowInfoInputPtr->destId);
                         pkt->setReserve(flowInfoInputPtr->used);
                         pkt->setType(ENDFLOW);
@@ -1290,6 +1302,7 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
                                 pkt->setSrcAddr((*itAux)->identify.src());
                                 pkt->setCallId((*itAux)->identify.callId());
                                 pkt->setFlowId((*itAux)->identify.flowId());
+                                pkt->setSourceId((*itAux)->identify.srcId());
                                 pkt->setDestAddr((*itAux)->destId);
                                 pkt->setReserve((*itAux)->used);
                                 pkt->setType(FLOWCHANGE);
@@ -1354,6 +1367,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
         flowId.callId() =  pk->getCallId();
         flowId.flowId() =  pk->getFlowId();
         flowId.src() = pk->getSrcAddr();
+        flowId.srcId() = pk->getSourceId();
 
         auto itFlowInput = inputFlows.find(flowId);
         auto itFlowOutput = outputFlows.find(flowId);

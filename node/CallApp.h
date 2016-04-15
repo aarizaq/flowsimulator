@@ -11,6 +11,7 @@
 #include <vector>
 #include <omnetpp.h>
 #include "DijkstraFuzzy.h"
+#include "FlowDataTypes.h"
 
 using namespace omnetpp;
 
@@ -31,12 +32,18 @@ private:
     bool generateFlow;
     cPar *TimeOn = nullptr;
     cPar *TimeOff = nullptr;
-    cPar *usedBandwith;
+    cPar *usedBandwith = nullptr;
+    cPar *flowArrival = nullptr;
+    cPar *flowDuration = nullptr;
+    cPar *flowUsedBandwith = nullptr;
 
     // state
     static uint64_t callIdentifier;
     uint64_t flowIdentifier = 0;
     cMessage *generateCall = nullptr;
+    cMessage *nextEvent = nullptr;
+    cMessage *nextFlow = nullptr;
+
     long callCounter = 0;
     long callReceived = 0;
     enum State
@@ -52,6 +59,14 @@ private:
         uint64_t recBandwith = 0;
         State state = OFF;
         simtime_t nextEvent;
+        simtime_t startOn;
+        simtime_t startOnRec;
+    };
+
+    struct FlowStat
+    {
+        uint64_t used = 0;
+        uint64_t total = 0;
         simtime_t startOn;
         simtime_t startOnRec;
     };
@@ -73,9 +88,19 @@ private:
         simtime_t startOnRec;
     };
 
+    struct FlowEvent
+    {
+        int dest = -1;
+        int destId = 0;
+        uint64_t flowId = 0;
+        uint64_t usedBandwith = 0;
+    };
+
+    std::map<FlowIdentification,FlowStat> flowStatistics;
+
     typedef std::map<int, unsigned long int> SequenceTable;
     std::map<simtime_t, CallInfo*> CallEvents;
-    cMessage *nextEvent = nullptr;
+    std::map<simtime_t, FlowEvent*> FlowEvents;
     DijkstraFuzzy *dijFuzzy = nullptr;
     SequenceTable sequenceTable;
 

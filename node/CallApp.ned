@@ -23,10 +23,18 @@ simple CallApp like IApp
         volatile double callDuration @unit(s) = default(exponential(60s)); // time between generating packets
         volatile double callReserve @unit(bps);  //
         
-        bool generateFlow = default(true);        
+        bool generateFlow = default(true); // the source can generate calls
+        // paramters of flows assined to calls          
         volatile double TimeOn @unit(s) = default(exponential(1s)); // time between generating packets
         volatile double TimeOff @unit(s) = default(exponential(1s)); // time between generating packets, can be 0 in in this case the flow can change the bandwith used
-        volatile double usedBandwith @unit(bps);  // 
+        volatile double usedBandwith @unit(bps);  //
+        
+        // independent flows
+        bool independentFlows = default(false);
+        volatile double flowArrival @unit(s) = default(exponential(1s));
+        volatile double flowDuration @unit(s) = default(exponential(1s));
+        volatile double flowUsedBandwith @unit(bps);  //
+         
          
         @display("i=block/browser");
     gates:

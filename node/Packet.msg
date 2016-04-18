@@ -19,6 +19,7 @@ struct LinkData
     double residual;
     double time;
     double nominal;
+    
 }
 
 enum PacketCode
@@ -34,8 +35,9 @@ enum PacketCode
     BREAK = 8;
     RESTORE = 10;
     RELEASEDELAYED = 11; // end a call
+    CROUTEFLOWSTART = 12; // Change in the routing tables
+    CROUTEFLOWEND = 13;
 }
-
 
 message PendingRelease
 {
@@ -62,6 +64,8 @@ packet Packet extends Base
 {
     int route[];
     double cost;
+    int hopOrigin; // used in the change routing.
+    int seqChange; // used in the change routing.
     uint64_t reserve;
     uint64_t flowId;
     uint64_t callId;

@@ -75,6 +75,8 @@ private:
     virtual bool procReserve(Packet *msg, int&, int&);
     virtual bool getForwarPortFreeFlow(Packet *msg, int&);
     virtual void checkPendingList();
+    virtual bool flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoInputPtr, FlowInfo *flowInfoOutputPtr, const int & portForward, const int & portInput, PacketCode codeStart);
+    virtual bool sendChangeFlow(FlowInfo &, const int &);
     virtual void procActualize(Actualize *pkt);
     virtual void procBroadcast(Base *pkt);
     virtual bool preProcPacket(Packet *);

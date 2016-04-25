@@ -13,15 +13,15 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef BASEFLOWDISTIRBUTION_H_
-#define BASEFLOWDISTIRBUTION_H_
+#ifndef BASEFLOWDISTRIBUTION_H_
+#define BASEFLOWDISTRIBUTION_H_
 
 #include <omnetpp.h>
 #include "FlowDataTypes.h"
 
 using namespace omnetpp;
 
-class BaseFlowDistirbution : public cObject
+class BaseFlowDistribution : public cObject
 {
 public:
     virtual bool startShare(std::vector<FlowInfo *> &, std::vector<FlowInfo *> &, const uint64_t &) = 0;

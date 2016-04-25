@@ -9,7 +9,7 @@
 #include "DijktraKShortest.h"
 #include "FlowDataTypes.h"
 
-#include "BaseFlowDistirbution.h"
+#include "BaseFlowDistribution.h"
 
 using namespace omnetpp;
 
@@ -64,7 +64,7 @@ private:
 
     bool inmediateNotificationLink = false;
 
-    BaseFlowDistirbution * flowDist = nullptr;
+    BaseFlowDistribution * flowDist = nullptr;
 
     ~FlowRouting();
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *) override;

@@ -92,7 +92,7 @@ void FlowRouting::initialize()
 
     const char *flowClass = par("flowClass").stringValue();
     if (!strcmp(flowClass, ""))
-        flowDist = check_and_cast<BaseFlowDistirbution*>(createOne(flowClass));
+        flowDist = check_and_cast<BaseFlowDistribution*>(createOne(flowClass));
 
     actualizeTimer = new cMessage("actualize timer");
     scheduleAt(simTime(), actualizeTimer);
@@ -275,23 +275,24 @@ bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
     if (flow.identify.callId() > 0)
         itCallInfo = callInfomap.find(flow.identify.callId());
 
-    it->second.port = port;
+    it->second.port = portForward;
     // free the bandwith in the old port
     auto itF = outputFlows.find(flow.identify);
 
-    FlowInfo outflowPtr = nullptr;
+    FlowInfo *outflowPtr = nullptr;
     if (itF != outputFlows.end()) {
         portData[itF->second.port].flowOcupation += itF->second.used;
-        itF->second.port = port;
+        itF->second.port = portForward;
         outflowPtr = &(itF->second);
     }
+    flow.port = portForward;
 
     if (portForward != -1) {
-        if (portData[portForward].flowOcupation > pk->getReserve()) {
-            outputFlows[flowId] = flowInfo;
+        if (portData[portForward].flowOcupation > pkt->getReserve()) {
+            outputFlows[flow.identify] = flow;
         }
         else {
-            if (!flodAdmision(bw, outflowPtr, &(it->second), portForward, portInput, CROUTEFLOWSTART)) {
+            if (!flodAdmision(bw, outflowPtr, &(it->second), portForward, it->second.portInput, CROUTEFLOWSTART)) {
                 return false;
             }
         }
@@ -997,7 +998,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
         }
     }
     else {
-        if (pk->getType() == ENDFLOW || pk->getType() == FLOWCHANGE) {
+        if (pk->getType() == ENDFLOW || pk->getType() == FLOWCHANGE || pk->getType() == CROUTEFLOWEND) {
             // check if exist the for in other case
             FlowIdentification flowId;
             flowId.flowId() = pk->getFlowId();
@@ -1070,14 +1071,27 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
     else {
         // flow not assigned to a call search in the ports info
 
-        auto itFlow = inputFlows.find(flowId);
-        if (itFlow != inputFlows.end())
-            throw cRuntimeError("Error Flow id already  in the input port  flows: port %i", portInput);
-        inputFlows[flowId] = flowInfo;
+        if (pk->getType() == CROUTEFLOWSTART) {
 
-        itFlow = outputFlows.find(flowId);
-        if (itFlow != outputFlows.end())
-            throw cRuntimeError("Error Flow id already  in the output port  flows: port %i", portForward);
+            inputFlows[flowId] = flowInfo;
+
+            auto itFlow = outputFlows.find(flowId);
+            if (itFlow != outputFlows.end()) {
+                // reset bandwidth
+                if (portData[itFlow->second.port].portStatus == UP)
+                    portData[itFlow->second.port].flowOcupation += itFlow->second.used;
+            }
+        }
+        else {
+            auto itFlow = inputFlows.find(flowId);
+            if (itFlow != inputFlows.end())
+                throw cRuntimeError("Error Flow id already  in the input port  flows: port %i", portInput);
+            inputFlows[flowId] = flowInfo;
+
+            itFlow = outputFlows.find(flowId);
+            if (itFlow != outputFlows.end())
+                throw cRuntimeError("Error Flow id already  in the output port  flows: port %i", portForward);
+        }
     }
 
     // check if port is up and if there is enough bandwidth unreserved for not oriented flows.
@@ -1113,7 +1127,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                 outputFlows[flowId] = flowInfo;
         }
         else {
-            if (!flodAdmision(pk->getReserve(), nullptr, &flowInfo, portForward, portInput, STARTFLOW))
+            if (!flodAdmision(pk->getReserve(), nullptr, &flowInfo, portForward, portInput, (PacketCode) pk->getType()))
             {
                 delete pk;
                 return false;
@@ -1426,7 +1440,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
 void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId, const int & portForward)
 {
     // check if event is a release type event.
-    bool releaseResources = pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == ENDFLOW; // end a call
+    bool releaseResources = pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == ENDFLOW || pk->getType() == CROUTEFLOWEND; // end a call
 
     if (destAddr == myAddress) {
         EV << "local delivery of packet " << pk->getName() << endl;
@@ -1597,7 +1611,7 @@ void FlowRouting::handleMessage(cMessage *msg)
         else if (pk->getType() == ACEPTED) {
             itCallInfo->second.state = CALLUP;
         }
-        else if (pk->getType() == STARTFLOW) {
+        else if (pk->getType() == STARTFLOW || pk->getType() == CROUTEFLOWSTART) {
             if (!procStartFlow(pk, portForward, portInput))
                 return; // nothing more to do
         }
@@ -1605,7 +1619,7 @@ void FlowRouting::handleMessage(cMessage *msg)
             if (!procFlowChange(pk, portForward, portInput))
                 return; // nothing more to do
         }
-        else if (pk->getType() == ENDFLOW) {
+        else if (pk->getType() == ENDFLOW || pk->getType() == CROUTEFLOWEND) {
             if (!procEndFlow(pk))
                 return;  // nothing more to do
         }

@@ -16,13 +16,13 @@
 #ifndef FINITEQEUEUE_H_
 #define FINITEQEUEUE_H_
 
-#include <BaseFlowDistirbution.h>
+#include <BaseFlowDistribution.h>
 
-class FiniteQeueue : public BaseFlowDistirbution
+class FiniteQueue : public BaseFlowDistribution
 {
 public:
-    FiniteQeueue();
-    virtual ~FiniteQeueue();
+    FiniteQueue();
+    virtual ~FiniteQueue();
     virtual bool startShare( std::vector<FlowInfo *> &, std::vector<FlowInfo *> &, const uint64_t &);
     virtual bool endShare(std::vector<FlowInfo *> &, std::vector<FlowInfo *> &, const uint64_t &);
 };

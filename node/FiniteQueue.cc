@@ -13,20 +13,20 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#include <FiniteQeueue.h>
+#include <FiniteQueue.h>
 
-FiniteQeueue::FiniteQeueue()
+FiniteQueue::FiniteQueue()
 {
     // TODO Auto-generated constructor stub
 
 }
 
-FiniteQeueue::~FiniteQeueue()
+FiniteQueue::~FiniteQueue()
 {
     // TODO Auto-generated destructor stub
 }
 
-bool FiniteQeueue::startShare(std::vector<FlowInfo *> &listOut, std::vector<FlowInfo *> &listIn, const uint64_t &bw)
+bool FiniteQueue::startShare(std::vector<FlowInfo *> &listOut, std::vector<FlowInfo *> &listIn, const uint64_t &bw)
 {
     uint64_t request = 0;
     for (auto elem : listIn) {
@@ -50,7 +50,7 @@ bool FiniteQeueue::startShare(std::vector<FlowInfo *> &listOut, std::vector<Flow
     return true;
 }
 
-bool FiniteQeueue::endShare(std::vector<FlowInfo *> &listOut, std::vector<FlowInfo *> &listIn, const uint64_t &bw)
+bool FiniteQueue::endShare(std::vector<FlowInfo *> &listOut, std::vector<FlowInfo *> &listIn, const uint64_t &bw)
 {
     uint64_t request = 0;
     for (auto elem : listIn) {

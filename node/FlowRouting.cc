@@ -91,11 +91,11 @@ void FlowRouting::initialize()
     localOutSize = this->gateSize("localOut");
 
     const char *flowClass = par("flowClass").stringValue();
-    if (!strcmp(flowClass, ""))
+    if (strcmp(flowClass, "") != 0)
         flowDist = check_and_cast<BaseFlowDistribution*>(createOne(flowClass));
 
     actualizeTimer = new cMessage("actualize timer");
-    scheduleAt(simTime(), actualizeTimer);
+    //scheduleAt(simTime(), actualizeTimer);
 }
 
 bool FlowRouting::actualize(Actualize *other)
@@ -1127,8 +1127,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                 outputFlows[flowId] = flowInfo;
         }
         else {
-            if (!flodAdmision(pk->getReserve(), nullptr, &flowInfo, portForward, portInput, (PacketCode) pk->getType()))
-            {
+            if (!flodAdmision(pk->getReserve(), nullptr, &flowInfo, portForward, portInput, (PacketCode) pk->getType())) {
                 delete pk;
                 return false;
             }
@@ -1137,7 +1136,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
     return true;
 }
 
-bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoInputPtr, FlowInfo *flowInfoOutputPtr, const int & portForward, const int & portInput, PacketCode codeStart)
+bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutputPtr, FlowInfo *flowInfoInputPtr, const int & portForward, const int & portInput, PacketCode codeStart)
 {
     // consume bandwidth
     auto itCallInfo = callInfomap.end();
@@ -1361,7 +1360,7 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
             }
         }
         else {
-            if (!flodAdmision(pk->getReserve(), flowInfoInputPtr, flowInfoOutputPtr, portForward, portInput, FLOWCHANGE)) {
+            if (!flodAdmision(pk->getReserve(), flowInfoOutputPtr, flowInfoInputPtr, portForward, portInput, FLOWCHANGE)) {
                 delete pk;
                 return false;
             }

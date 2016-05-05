@@ -170,11 +170,6 @@ void CallApp::initialize()
     WATCH_MAP(receivedBytes);
     WATCH_MAP(sendBytes);
 
-    if (par("independentFlows").boolValue()) {
-        nextFlow = new cMessage();
-        scheduleAt(flowArrival->doubleValue(), nextFlow);
-    }
-
     const char *destAddressesPar = par("destAddresses");
     cStringTokenizer tokenizer(destAddressesPar);
     const char *token;
@@ -188,6 +183,13 @@ void CallApp::initialize()
     generateCall = new cMessage("nextCall");
     if (!destAddresses.empty())
         scheduleAt(callArrival->doubleValue(), generateCall);
+
+    if (par("independentFlows").boolValue() && !destAddresses.empty()) {
+        nextFlow = new cMessage();
+        scheduleAt(flowArrival->doubleValue(), nextFlow);
+    }
+
+
     nextEvent = new cMessage("NewEvent");
     readTopo();
     RegisterMsg * msg = new RegisterMsg();
@@ -198,140 +200,157 @@ void CallApp::initialize()
 void CallApp::handleMessage(cMessage *msg)
 {
     char pkname[40];
-    if (msg == generateCall) {
-        // Sending packet
-        callCounter++;
-        int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
+    if (!msg->isPacket()) {
+        if (msg == generateCall) {
+            // Sending packet
+            callCounter++;
+            int destAddress = destAddresses[intuniform(0,
+                    destAddresses.size() - 1)];
 
-        sprintf(pkname, "pkReserve-%d-to-%d-#%lud-Did-%ld", myAddress, destAddress, callIdentifier,
-                par("sourceId").longValue());
-        EV << "generating packet " << pkname << endl;
+            sprintf(pkname, "pkReserve-%d-to-%d-#%lud-Did-%ld", myAddress,
+                    destAddress, callIdentifier, par("sourceId").longValue());
+            EV << "generating packet " << pkname << endl;
 
-        Packet *pk = new Packet(pkname);
-        pk->setType(RESERVE);
-        pk->setReserve(callReserve->doubleValue());
-        pk->setSrcAddr(myAddress);
-        pk->setDestAddr(destAddress);
-        pk->setCallId(callIdentifier);
-        callIdentifier++;
-        if (callIdentifier == 0) // 0 is reserved for flows not assigned to a call.
+            Packet *pk = new Packet(pkname);
+            pk->setType(RESERVE);
+            pk->setReserve(callReserve->doubleValue());
+            pk->setSrcAddr(myAddress);
+            pk->setDestAddr(destAddress);
+            pk->setCallId(callIdentifier);
             callIdentifier++;
-        pk->setSourceId(par("sourceId"));
-        pk->setDestinationId(par("destinationId"));
+            if (callIdentifier == 0) // 0 is reserved for flows not assigned to a call.
+                callIdentifier++;
+            pk->setSourceId(par("sourceId"));
+            pk->setDestinationId(par("destinationId"));
 
-        // TODO: Include the source routing in the packet.
-        // dijFuzzy->runDisjoint(destAddress);
+            // TODO: Include the source routing in the packet.
+            // dijFuzzy->runDisjoint(destAddress);
 
-        // TODO : recall timer,
+            // TODO : recall timer,
 
-        send(pk, "out");
+            send(pk, "out");
 
-        if (!destAddresses.empty())
-            scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
-        if (hasGUI())
-            getParentModule()->bubble("Generating call..");
-        rescheduleEvent();
-        return;
-    }
-    else if (msg == nextFlow) {
-        // generate the next flow
-        int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
-        Packet *pkFlow = new Packet();
-        pkFlow->setReserve(flowUsedBandwith->doubleValue());
-        pkFlow->setDestAddr(destAddress);
-        pkFlow->setCallId(0);
-        pkFlow->setSourceId(par("sourceId"));
-        pkFlow->setDestinationId(par("destinationId"));
-        pkFlow->setSrcAddr(myAddress);
-        pkFlow->setFlowId(flowIdentifier++);
-        pkFlow->setType(STARTFLOW);
-
-        FlowEvent *event = new FlowEvent;
-        event->dest = destAddress;
-        event->destId = pkFlow->getDestinationId();
-        event->flowId = pkFlow->getFlowId();
-        event->usedBandwith = pkFlow->getReserve();
-        FlowEvents.insert(std::make_pair(simTime()+flowDuration->doubleValue(),event));
-
-        scheduleAt(simTime()+flowArrival->doubleValue(), nextFlow);
-    }
-    else if (msg == nextEvent) {
-        double delayAux;
-        while (!CallEvents.empty() && CallEvents.begin()->first <= simTime()) {
-            auto it = CallEvents.begin();
-            CallInfo *callInfo = it->second;
-            CallEvents.erase(it);
-
+            if (!destAddresses.empty())
+                scheduleAt(simTime() + callArrival->doubleValue(),
+                        generateCall);
+            if (hasGUI())
+                getParentModule()->bubble("Generating call..");
+        }
+        else if (msg == nextFlow) {
+            // generate the next flow
+            int destAddress = destAddresses[intuniform(0,
+                    destAddresses.size() - 1)];
             Packet *pkFlow = new Packet();
-            pkFlow->setReserve(callInfo->usedBandwith);
-            pkFlow->setDestAddr(callInfo->dest);
-            pkFlow->setCallId(callInfo->callId);
+            pkFlow->setReserve(flowUsedBandwith->doubleValue());
+            pkFlow->setDestAddr(destAddress);
+            pkFlow->setCallId(0);
             pkFlow->setSourceId(par("sourceId"));
-            pkFlow->setDestinationId(callInfo->sourceId);
+            pkFlow->setDestinationId(par("destinationId"));
             pkFlow->setSrcAddr(myAddress);
+            pkFlow->setFlowId(flowIdentifier++);
+            pkFlow->setType(STARTFLOW);
 
-            if (callInfo->flowData.empty()) {
-                if (callInfo->state == ON) {
-                    callInfo->acumulateSend += (callInfo->usedBandwith * callInfo->startOn.dbl());
-                    sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(), callIdentifier, this->getIndex());
-                    pkFlow->setName(pkname);
-                    callInfo->state = OFF;
-                    pkFlow->setType(ENDFLOW);
-                    pkFlow->setFlowId(callInfo->flowId);
-                    delayAux = TimeOff->doubleValue();
+            send(pkFlow, "out");
 
-                }
-                else if (callInfo->state == OFF) {
-                    sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(), callIdentifier, this->getIndex());
-                    pkFlow->setName(pkname);
-                    callInfo->state = ON;
-                    callInfo->flowId++;
-                    pkFlow->setFlowId(callInfo->flowId);
-                    callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
-                    pkFlow->setType(STARTFLOW);
-                    delayAux = TimeOn->doubleValue();
-                    callInfo->startOn = delayAux;
-                }
-                send(pkFlow, "out");
-                CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
-            }
-            else {
-                // multi flow system
-                for (auto &elem : callInfo->flowData) {
-                    if (elem.nextEvent > simTime())
-                        continue;
-                    if (elem.state == ON) {
-                        callInfo->acumulateSend += (elem.usedBandwith * elem.startOn.dbl());
-                        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),
+            if (hasGUI())
+                getParentModule()->bubble("Generating flow..");
+
+            FlowEvent *event = new FlowEvent;
+            event->dest = destAddress;
+            event->destId = pkFlow->getDestinationId();
+            event->flowId = pkFlow->getFlowId();
+            event->usedBandwith = pkFlow->getReserve();
+            FlowEvents.insert(std::make_pair(simTime() + flowDuration->doubleValue(), event));
+            scheduleAt(simTime() + flowArrival->doubleValue(), nextFlow);
+        }
+        else if (msg == nextEvent) {
+            double delayAux;
+            while (!CallEvents.empty() && CallEvents.begin()->first <= simTime()) {
+                auto it = CallEvents.begin();
+                CallInfo *callInfo = it->second;
+                CallEvents.erase(it);
+
+                Packet *pkFlow = new Packet();
+                pkFlow->setReserve(callInfo->usedBandwith);
+                pkFlow->setDestAddr(callInfo->dest);
+                pkFlow->setCallId(callInfo->callId);
+                pkFlow->setSourceId(par("sourceId"));
+                pkFlow->setDestinationId(callInfo->sourceId);
+                pkFlow->setSrcAddr(myAddress);
+
+                if (callInfo->flowData.empty()) {
+                    if (callInfo->state == ON) {
+                        callInfo->acumulateSend += (callInfo->usedBandwith
+                                * callInfo->startOn.dbl());
+                        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-Sid-%d",
+                                myAddress, pkFlow->getDestAddr(),
                                 callIdentifier, this->getIndex());
-
-                        pkFlow->setFlowId(elem.flowId);
                         pkFlow->setName(pkname);
-                        elem.state = OFF;
+                        callInfo->state = OFF;
                         pkFlow->setType(ENDFLOW);
+                        pkFlow->setFlowId(callInfo->flowId);
                         delayAux = TimeOff->doubleValue();
 
                     }
-                    else if (elem.state == OFF) {
-                        sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),
+                    else if (callInfo->state == OFF) {
+                        sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d",
+                                myAddress, pkFlow->getDestAddr(),
                                 callIdentifier, this->getIndex());
                         pkFlow->setName(pkname);
-                        elem.state = ON;
+                        callInfo->state = ON;
                         callInfo->flowId++;
-                        elem.flowId = callInfo->flowId;
                         pkFlow->setFlowId(callInfo->flowId);
-                        elem.usedBandwith = (uint64_t) usedBandwith->doubleValue();
+                        callInfo->usedBandwith =
+                                (uint64_t) usedBandwith->doubleValue();
                         pkFlow->setType(STARTFLOW);
                         delayAux = TimeOn->doubleValue();
                         callInfo->startOn = delayAux;
                     }
-
-                    elem.nextEvent = simTime() + delayAux;
                     send(pkFlow, "out");
                     CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
                 }
-            }
+                else {
+                    // multi flow system
+                    for (auto &elem : callInfo->flowData) {
+                        if (elem.nextEvent > simTime())
+                            continue;
+                        if (elem.state == ON) {
+                            callInfo->acumulateSend += (elem.usedBandwith
+                                    * elem.startOn.dbl());
+                            sprintf(pkname,
+                                    "FlowOff-%d-to-%d-CallId#%lud-Sid-%d",
+                                    myAddress, pkFlow->getDestAddr(),
+                                    callIdentifier, this->getIndex());
 
+                            pkFlow->setFlowId(elem.flowId);
+                            pkFlow->setName(pkname);
+                            elem.state = OFF;
+                            pkFlow->setType(ENDFLOW);
+                            delayAux = TimeOff->doubleValue();
+
+                        }
+                        else if (elem.state == OFF) {
+                            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d",
+                                    myAddress, pkFlow->getDestAddr(),
+                                    callIdentifier, this->getIndex());
+                            pkFlow->setName(pkname);
+                            elem.state = ON;
+                            callInfo->flowId++;
+                            elem.flowId = callInfo->flowId;
+                            pkFlow->setFlowId(callInfo->flowId);
+                            elem.usedBandwith =
+                                    (uint64_t) usedBandwith->doubleValue();
+                            pkFlow->setType(STARTFLOW);
+                            delayAux = TimeOn->doubleValue();
+                            callInfo->startOn = delayAux;
+                        }
+
+                        elem.nextEvent = simTime() + delayAux;
+                        send(pkFlow, "out");
+                        CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
+                    }
+                }
+            }
 
             while (!FlowEvents.empty() && FlowEvents.begin()->first <= simTime()) {
                 auto it = FlowEvents.begin();
@@ -347,20 +366,29 @@ void CallApp::handleMessage(cMessage *msg)
                 pkFlow->setSrcAddr(myAddress);
                 //callInfo->acumulateSend += (callInfo->usedBandwith
                 //        * callInfo->startOn.dbl());
-                sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(), 0,
-                        this->getIndex());
+                sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-Sid-%d",
+                        myAddress, pkFlow->getDestAddr(), 0, this->getIndex());
                 pkFlow->setName(pkname);
                 pkFlow->setType(ENDFLOW);
-                pkFlow->setFlowId(callInfo->flowId);
+                pkFlow->setFlowId(flowEvent->flowId);
                 send(pkFlow, "out");
                 delete flowEvent;
             }
         }
+        else
+            delete msg;
 
         rescheduleEvent();
         return;
+
     }
+
     Base *pkaux = dynamic_cast<Base *>(msg);
+    if (pkaux == nullptr) {
+        delete msg;
+        return;
+    }
+
     if (pkaux->getType() == ACTUALIZE) {
         Actualize *pk = dynamic_cast<Actualize *>(msg);
         for (unsigned int i = 0; i < pk->getLinkDataArraySize(); i++) {

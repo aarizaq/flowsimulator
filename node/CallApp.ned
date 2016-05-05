@@ -16,7 +16,7 @@ simple CallApp like IApp
 {
     parameters:
         int address;  // local node address
-        string destAddresses;  // destination addresses
+        string destAddresses = default("");  // destination addresses
         int sourceId = default(0);
         int destinationId = default(0);
         volatile double callArrival @unit(s) = default(exponential(20s)); // time between generating packets

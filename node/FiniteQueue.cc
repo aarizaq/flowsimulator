@@ -15,6 +15,8 @@
 
 #include <FiniteQueue.h>
 
+Register_Class(FiniteQueue);
+
 FiniteQueue::FiniteQueue()
 {
     // TODO Auto-generated constructor stub

@@ -207,7 +207,7 @@ void CallApp::handleMessage(cMessage *msg)
             int destAddress = destAddresses[intuniform(0,
                     destAddresses.size() - 1)];
 
-            sprintf(pkname, "pkReserve-%d-to-%d-#%lud-Did-%ld", myAddress,
+            sprintf(pkname, "CallReserve-%d-to-%d-Call id#%lud-Did-%ld", myAddress,
                     destAddress, callIdentifier, par("sourceId").longValue());
             EV << "generating packet " << pkname << endl;
 
@@ -241,6 +241,8 @@ void CallApp::handleMessage(cMessage *msg)
             int destAddress = destAddresses[intuniform(0,
                     destAddresses.size() - 1)];
             Packet *pkFlow = new Packet();
+
+
             pkFlow->setReserve(flowUsedBandwith->doubleValue());
             pkFlow->setDestAddr(destAddress);
             pkFlow->setCallId(0);
@@ -249,6 +251,10 @@ void CallApp::handleMessage(cMessage *msg)
             pkFlow->setSrcAddr(myAddress);
             pkFlow->setFlowId(flowIdentifier++);
             pkFlow->setType(STARTFLOW);
+
+            sprintf(pkname, "NewFlow-%d-to-%d-Call Id #%lud- Flow Id #%lud -Did-%ld", myAddress,
+                                            destAddress, callIdentifier,pkFlow->getFlowId(), par("sourceId").longValue());
+            pkFlow->setName(pkname);
 
             send(pkFlow, "out");
 
@@ -282,21 +288,21 @@ void CallApp::handleMessage(cMessage *msg)
                     if (callInfo->state == ON) {
                         callInfo->acumulateSend += (callInfo->usedBandwith
                                 * callInfo->startOn.dbl());
-                        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-Sid-%d",
-                                myAddress, pkFlow->getDestAddr(),
-                                callIdentifier, this->getIndex());
-                        pkFlow->setName(pkname);
+
+
                         callInfo->state = OFF;
                         pkFlow->setType(ENDFLOW);
                         pkFlow->setFlowId(callInfo->flowId);
                         delayAux = TimeOff->doubleValue();
 
+                        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                                                        myAddress, pkFlow->getDestAddr(),
+                                                        pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
+                        pkFlow->setName(pkname);
+
                     }
                     else if (callInfo->state == OFF) {
-                        sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d",
-                                myAddress, pkFlow->getDestAddr(),
-                                callIdentifier, this->getIndex());
-                        pkFlow->setName(pkname);
+
                         callInfo->state = ON;
                         callInfo->flowId++;
                         pkFlow->setFlowId(callInfo->flowId);
@@ -305,6 +311,11 @@ void CallApp::handleMessage(cMessage *msg)
                         pkFlow->setType(STARTFLOW);
                         delayAux = TimeOn->doubleValue();
                         callInfo->startOn = delayAux;
+
+                        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                                myAddress, pkFlow->getDestAddr(),
+                                pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
+                        pkFlow->setName(pkname);
                     }
                     send(pkFlow, "out");
                     CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
@@ -317,23 +328,18 @@ void CallApp::handleMessage(cMessage *msg)
                         if (elem.state == ON) {
                             callInfo->acumulateSend += (elem.usedBandwith
                                     * elem.startOn.dbl());
-                            sprintf(pkname,
-                                    "FlowOff-%d-to-%d-CallId#%lud-Sid-%d",
-                                    myAddress, pkFlow->getDestAddr(),
-                                    callIdentifier, this->getIndex());
-
                             pkFlow->setFlowId(elem.flowId);
                             pkFlow->setName(pkname);
                             elem.state = OFF;
                             pkFlow->setType(ENDFLOW);
                             delayAux = TimeOff->doubleValue();
+                            sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                                    myAddress, pkFlow->getDestAddr(),
+                                    pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
+                            pkFlow->setName(pkname);
 
                         }
                         else if (elem.state == OFF) {
-                            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d",
-                                    myAddress, pkFlow->getDestAddr(),
-                                    callIdentifier, this->getIndex());
-                            pkFlow->setName(pkname);
                             elem.state = ON;
                             callInfo->flowId++;
                             elem.flowId = callInfo->flowId;
@@ -343,6 +349,10 @@ void CallApp::handleMessage(cMessage *msg)
                             pkFlow->setType(STARTFLOW);
                             delayAux = TimeOn->doubleValue();
                             callInfo->startOn = delayAux;
+                            sprintf(pkname, "FlowOn-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                                    myAddress, pkFlow->getDestAddr(),
+                                    pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
+                            pkFlow->setName(pkname);
                         }
 
                         elem.nextEvent = simTime() + delayAux;
@@ -366,11 +376,14 @@ void CallApp::handleMessage(cMessage *msg)
                 pkFlow->setSrcAddr(myAddress);
                 //callInfo->acumulateSend += (callInfo->usedBandwith
                 //        * callInfo->startOn.dbl());
-                sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-Sid-%d",
-                        myAddress, pkFlow->getDestAddr(), 0, this->getIndex());
-                pkFlow->setName(pkname);
+
                 pkFlow->setType(ENDFLOW);
                 pkFlow->setFlowId(flowEvent->flowId);
+                sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                        myAddress, pkFlow->getDestAddr(),
+                        pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
+                pkFlow->setName(pkname);
+
                 send(pkFlow, "out");
                 delete flowEvent;
             }

@@ -253,7 +253,7 @@ void CallApp::handleMessage(cMessage *msg)
             pkFlow->setType(STARTFLOW);
 
             sprintf(pkname, "NewFlow-%d-to-%d-Call Id #%lud- Flow Id #%lud -Did-%ld", myAddress,
-                                            destAddress, callIdentifier,pkFlow->getFlowId(), par("sourceId").longValue());
+                                            destAddress, pkFlow->getCallId(),pkFlow->getFlowId(), par("sourceId").longValue());
             pkFlow->setName(pkname);
 
             send(pkFlow, "out");
@@ -329,7 +329,6 @@ void CallApp::handleMessage(cMessage *msg)
                             callInfo->acumulateSend += (elem.usedBandwith
                                     * elem.startOn.dbl());
                             pkFlow->setFlowId(elem.flowId);
-                            pkFlow->setName(pkname);
                             elem.state = OFF;
                             pkFlow->setType(ENDFLOW);
                             delayAux = TimeOff->doubleValue();
@@ -466,7 +465,7 @@ void CallApp::handleMessage(cMessage *msg)
         pk->setType(RELEASE);
         pk->setDestAddr(pk->getSrcAddr());
         pk->setSrcAddr(myAddress);
-        sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress, pk->getDestAddr(), callIdentifier,
+        sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress, pk->getDestAddr(), pk->getCallId(),
                 this->getIndex());
         pk->setName(pkname);
 
@@ -494,7 +493,7 @@ void CallApp::handleMessage(cMessage *msg)
             pkFlow->setType(STARTFLOW);
             pkFlow->setReserve(callInfo->usedBandwith);
             pkFlow->setFlowId(callInfo->flowId);
-            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(), callIdentifier,
+            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(), pkFlow->getCallId(),
                     this->getIndex());
             pkFlow->setName(pkname);
             CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));

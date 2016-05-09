@@ -106,8 +106,9 @@ bool FlowRouting::actualize(Actualize *other)
             return false;
         cancelEvent(actualizeTimer);
     }
-
-    Actualize *pkt = new Actualize("actualize");
+    char pkname[40];
+    sprintf(pkname, "Actualize-%d", myAddress);
+    Actualize *pkt = new Actualize(pkname);
 
     pkt->setSourceId(myAddress);
     pkt->setDestAddr(-1);
@@ -266,6 +267,13 @@ bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
     pkt->setDestAddr(flow.destId);
     pkt->setReserve(flow.used);
     pkt->setType(CROUTEFLOWEND);
+
+    if (hasGUI()) {
+        char pkname[100];
+        sprintf(pkname, "CROUTEFLOWENDL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+        pkt->setName(pkname);
+    }
     send(pkt, "out", flow.port);
     // now check the bandwidth and if there is enough bandwidth in the new port
     uint64_t bw = it->second.used;
@@ -420,6 +428,13 @@ void FlowRouting::processLinkEvents(cObject *obj)
                                     auto it = sourceIdGate.find(pkt->getDestinationId());
                                     if (it == sourceIdGate.end())
                                         throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
+
+                                    if (hasGUI()) {
+                                        char pkname[100];
+                                        sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                                pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                                        pkt->setName(pkname);
+                                    }
                                     send(pkt, "localOut", it->second);
                                 }
                             }
@@ -443,6 +458,13 @@ void FlowRouting::processLinkEvents(cObject *obj)
                             pkt->setCallId(elem.first);
                             pkt->setType(RELEASE);
 
+                            if (hasGUI()) {
+                                char pkname[100];
+                                sprintf(pkname, "ReleaseL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                        pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                                pkt->setName(pkname);
+                            }
+
                             // se envía hacia el destino
                             auto it = sourceIdGate.find(pkt->getDestinationId());
                             if (it == sourceIdGate.end())
@@ -465,6 +487,12 @@ void FlowRouting::processLinkEvents(cObject *obj)
                             auto it = sourceIdGate.find(pkt->getDestinationId());
                             if (it == sourceIdGate.end())
                                 throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
+                            if (hasGUI()) {
+                                char pkname[100];
+                                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                        pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                                pkt->setName(pkname);
+                            }
                             send(pkt, "localOut", it->second);
                         }
                     }
@@ -520,6 +548,12 @@ void FlowRouting::processLinkEvents(cObject *obj)
                                     pkt->setDestAddr(itCallInfo->second.node2);
                                 else
                                     pkt->setDestAddr(itCallInfo->second.node1);
+                                if (hasGUI()) {
+                                    char pkname[100];
+                                    sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                            pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                                    pkt->setName(pkname);
+                                }
                                 send(pkt, "out", flowinfo.port);
                             }
                         }
@@ -570,6 +604,13 @@ void FlowRouting::processLinkEvents(cObject *obj)
                             auto it = sourceIdGate.find(pktAux->getDestinationId());
                             if (it == sourceIdGate.end())
                                 throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
+
+                            if (hasGUI()) {
+                                char pkname[100];
+                                printf(pkname, "ReleaseL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                    pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                                pkt->setName(pkname);
+                            }
                             send(pktAux, "localOut", it->second);
                         }
 
@@ -640,6 +681,12 @@ void FlowRouting::processLinkEvents(cObject *obj)
                         pkt->setSourceId(it->second.identify.srcId());
                         pkt->setDestAddr(it->second.dest);
                         pkt->setDestinationId(it->second.destId);
+                        if (hasGUI()) {
+                            char pkname[100];
+                            sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                    pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                            pkt->setName(pkname);
+                        }
                         send(pkt, "out", it->second.port);
                     }
                     outputFlows.erase(it++);
@@ -681,9 +728,12 @@ void FlowRouting::processLinkEvents(cObject *obj)
     }
 }
 
-// this method checks if it is possible to reserve enough bandwidth, it it possible retur true, if not is possible sends a reject message to the origin and returns false.
+// this method checks if it is possible to reserve enough bandwidth, it it possible return true, if not is possible sends a reject message to the origin and returns false.
 bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
 {
+    if (pk->getCallId() == 0)
+        return false;
+
     auto it = rtable.end();
     int port1 = -1;
     int port2 = -1;
@@ -739,17 +789,29 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
     // check link status
     if (rejected) {
         // reject call
-        pk->setType(REJECTED);
-        int tempAddr = pk->getSrcAddr();
-        pk->setSrcAddr(pk->getDestAddr());
-        pk->setDestAddr(tempAddr);
+        Packet *pkt = pk->dup();
+        pkt->setType(REJECTED);
+
+        pkt->setSrcAddr(pk->getDestAddr());
+        pkt->setDestAddr(pk->getSrcAddr());
+
+        pkt->setDestinationId(pk->getSourceId());
+        pkt->setSourceId(pk->getDestinationId());
+
+        if (hasGUI()) {
+            char pkname[100];
+            sprintf(pkname, "RejectedL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                    pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+            pkt->setName(pkname);
+        }
+
         if (srcAddr == myAddress) {
             // send up
-            send(pk, "localOut", pk->getArrivalGate()->getIndex());
+            send(pkt, "localOut", pk->getArrivalGate()->getIndex());
         }
         else {
             // send Reject message to the sender node.
-            send(pk, "out", pk->getArrivalGate()->getIndex());
+            send(pkt, "out", pk->getArrivalGate()->getIndex());
         }
         return false;
     }
@@ -770,7 +832,8 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
     callInfo.applicationId1 = pk->getSourceId();
     callInfo.applicationId2 = pk->getDestinationId();
 
-    callInfomap[pk->getCallId()] = callInfo;
+    callInfomap.insert(std::make_pair(pk->getCallId(),callInfo));
+
     portForward = port1;
     destId = callInfo.applicationId2;
     return true;
@@ -904,6 +967,12 @@ void FlowRouting::checkPendingList()
                 pkStartFlow->setDestinationId(it->destId);
                 pkStartFlow->setType(STARTFLOW);
                 pkStartFlow->setReserve(it->used);
+                if (hasGUI()) {
+                    char pkname[100];
+                    sprintf(pkname, "StartFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkStartFlow->getSrcAddr(),
+                            pkStartFlow->getDestAddr(), pkStartFlow->getCallId(), pkStartFlow->getFlowId(), pkStartFlow->getDestinationId());
+                    pkStartFlow->setName(pkname);
+                }
                 send(pkStartFlow, "out", it->port);
                 it = pendingFlows.erase(it);
             }
@@ -1151,10 +1220,14 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
             if (itCallInfo != callInfomap.end()) {
                 auto it = std::find(itCallInfo->second.outputFlows.begin(),
                         itCallInfo->second.outputFlows.end(), *flowInfoInputPtr);
+                if (it == itCallInfo->second.outputFlows.end())
+                    throw cRuntimeError("Error in call outputFlows list");
                 itCallInfo->second.outputFlows.erase(it);
             }
             else {
                 auto itFlow = outputFlows.find(flowInfoInputPtr->identify);
+                if (itFlow == outputFlows.end())
+                    throw cRuntimeError("Error in outputFlows list");
                 outputFlows.erase(itFlow);
             }
             // send end flow
@@ -1171,6 +1244,13 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
                 for (unsigned int i = 0;
                         i < flowInfoInputPtr->sourceRouting.size(); i++)
                     pkt->setRoute(i, flowInfoInputPtr->sourceRouting[i]);
+            }
+
+            if (hasGUI()) {
+                char pkname[100];
+                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                        pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                pkt->setName(pkname);
             }
             send(pkt, "out", portForward);
         }
@@ -1219,6 +1299,12 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
                         for (unsigned int i = 0;
                                 i < (*itAux)->sourceRouting.size(); i++)
                             pkt->setRoute(i, (*itAux)->sourceRouting[i]);
+                    }
+                    if (hasGUI()) {
+                        char pkname[100];
+                        sprintf(pkname, "FlowChangeL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                        pkt->setName(pkname);
                     }
                     send(pkt, "out", portForward);
                 }

@@ -199,7 +199,7 @@ void CallApp::initialize()
 
 void CallApp::handleMessage(cMessage *msg)
 {
-    char pkname[40];
+    char pkname[100];
     if (!msg->isPacket()) {
         if (msg == generateCall) {
             // Sending packet
@@ -505,11 +505,11 @@ void CallApp::handleMessage(cMessage *msg)
     }
     else if (pk->getType() == RELEASE || pk->getType() == RELEASEDELAYED) {
         // Handle incoming packet
-        for (auto it = CallEvents.begin(); it != CallEvents.end(); ++it) {
-            if (it->second->callId == pk->getCallId()) {
-                delete it->second;
-                CallEvents.erase(it);
-            }
+        for (auto it = CallEvents.begin(); it != CallEvents.end(); ) {
+            if (it->second->callId == pk->getCallId())
+                CallEvents.erase(it++);
+            else
+                ++it;
         }
 
         // acumular el ancho de banda enviado
@@ -517,17 +517,18 @@ void CallApp::handleMessage(cMessage *msg)
         if (it == activeCalls.end())
             throw cRuntimeError("Call id is not registered");
 
-        auto itAccSend = sendBytes.find(it->second->dest);
-        auto itAccRec = receivedBytes.find(it->second->dest);
+        CallInfo *callInfo = it->second;
+        auto itAccSend = sendBytes.find(callInfo->dest);
+        auto itAccRec = receivedBytes.find(callInfo->dest);
         if (itAccSend == sendBytes.end())
-            sendBytes[it->second->dest] = it->second->acumulateSend;
+            sendBytes[it->second->dest] = callInfo->acumulateSend;
         else
-            itAccSend->second += it->second->acumulateSend;
+            itAccSend->second += callInfo->acumulateSend;
         if (itAccRec == receivedBytes.end())
-            receivedBytes[it->second->dest] = it->second->acumulateRec;
+            receivedBytes[callInfo->dest] = callInfo->acumulateRec;
         else
-            itAccRec->second += it->second->acumulateRec;
-        delete it->second;
+            itAccRec->second += callInfo->acumulateRec;
+        delete callInfo;
         activeCalls.erase(it);
 
         if (pk->isSelfMessage())

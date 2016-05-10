@@ -31,7 +31,7 @@ struct NeighborsPorts // allows identify the port using the address.
 {
     int port;
     LinkState state;
-    omnetpp::simtime_t failureTime;
+    simtime_t failureTime;
 };
 
 // Information flow

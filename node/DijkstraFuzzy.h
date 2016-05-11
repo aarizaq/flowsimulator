@@ -291,6 +291,7 @@ public:
     virtual ~Dijkstra();
     virtual void discoverPartitionedLinks(const LinkArray &, LinkArray &);
     virtual void discoverPartitionedLinks(std::vector<NodeId> &pathNode, const LinkArray &, LinkArray &);
+    virtual void discoverAllPartitionedLinks(const LinkArray & topo, LinkArray &links);
 
     virtual void setFromTopo(const cTopology *);
     virtual void setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray &);

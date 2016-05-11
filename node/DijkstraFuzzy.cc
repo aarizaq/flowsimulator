@@ -1225,13 +1225,48 @@ void Dijkstra::discoverPartitionedLinks(std::vector<NodeId> &pathNode, const Lin
         if (tempEdge == nullptr)
             throw cRuntimeError("Link not found %i - %i", pathNode[i], pathNode[i + 1]);
         RouteMap routeMap;
+
         runUntil(origin, nodeId, topoAux, routeMap);
+        setRoot(origin);
         std::vector<NodeId> pathNode;
         bool has = getRoute(nodeId, pathNode, routeMap);
         // include the link other time
         it->second.push_back(tempEdge);
         if (!has)
             addEdge(origin, nodeId, 1, links);
+    }
+}
+
+void Dijkstra::discoverAllPartitionedLinks(const LinkArray & topo, LinkArray &links)
+{
+
+    LinkArray topoAux = topo;
+    std::vector<std::pair <NodeId, NodeId> > tested;
+    for (auto elem : topo)
+    {
+        NodeId node = elem.first;
+        for (unsigned int i = 0; i < elem.second.size();i++)
+        {
+
+            auto it1 = std::find(tested.begin(),tested.end(),std::make_pair(node, elem.second[i]->last_node()));
+            if (it1 != tested.end())
+                continue;
+
+            deleteEdge(node, elem.second[i]->last_node(), topoAux);
+
+            RouteMap routeMap;
+            runUntil(node, elem.second[i]->last_node(), topoAux, routeMap);
+            std::vector<NodeId> pathNode;
+            setRoot(node);
+            bool has = getRoute(elem.second[i]->last_node(), pathNode, routeMap);
+            if (!has) {
+                addEdge(node, elem.second[i]->last_node(), 1, links);
+                addEdge(elem.second[i]->last_node(), node, 1, links);
+            }
+            addEdge(node, elem.second[i]->last_node(), elem.second[i]->Cost(), topoAux);
+            tested.push_back(std::make_pair(node, elem.second[i]->last_node()));
+            tested.push_back(std::make_pair(elem.second[i]->last_node(),node));
+        }
     }
 }
 

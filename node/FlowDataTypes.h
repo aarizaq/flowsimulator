@@ -9,6 +9,7 @@
 #define FLOWDATATYPES_H_
 
 #include <omnetpp.h>
+using namespace omnetpp;
 enum LinkState
 {
     UP, DOWN

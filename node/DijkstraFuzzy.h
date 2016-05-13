@@ -146,7 +146,8 @@ public:
     virtual void cleanLinkArray();
     virtual void clearAll();
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double, double, double);
-    virtual void eraseEdge(const NodeId & originNode, const NodeId & last_node);
+    virtual void deleteEdge(const NodeId & originNode, const NodeId & last_node);
+    virtual void deleteEdgeWithoutDeletePtr(const NodeId & originNode, const NodeId & last_node);
     virtual void setRoot(const NodeId & dest_node);
     virtual void run();
     virtual void run(const LinkArray &linkArray, RouteMap&, MapRoutes&);
@@ -223,7 +224,6 @@ protected:
 
 public:
     typedef std::vector<NodeId> Route;
-protected:
     typedef std::map<NodeId, Route> MapRoutes;
 
     class SetElem
@@ -282,6 +282,7 @@ protected:
 
     typedef std::map<NodeId, Dijkstra::State> RouteMap;
     typedef std::map<NodeId, std::vector<Dijkstra::Edge*> > LinkArray;
+protected:
     LinkArray linkArray;
     RouteMap routeMap;
     NodeId rootNode;
@@ -289,9 +290,16 @@ public:
 
     Dijkstra();
     virtual ~Dijkstra();
-    virtual void discoverPartitionedLinks(const LinkArray &, LinkArray &);
     virtual void discoverPartitionedLinks(std::vector<NodeId> &pathNode, const LinkArray &, LinkArray &);
     virtual void discoverAllPartitionedLinks(const LinkArray & topo, LinkArray &links);
+
+    virtual void discoverPartitionedLinks(std::vector<NodeId> &pathNode, LinkArray &array) {
+        discoverPartitionedLinks(pathNode, linkArray, array);
+    }
+
+    virtual void discoverAllPartitionedLinks(LinkArray &links) {
+        discoverAllPartitionedLinks(linkArray, links);
+    }
 
     virtual void setFromTopo(const cTopology *);
     virtual void setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray &);
@@ -299,10 +307,13 @@ public:
 
     virtual void cleanLinkArray(LinkArray &);
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, LinkArray &);
+    virtual void addEdge(const NodeId & dest_node, Edge*, LinkArray &);
     virtual void deleteEdge(const NodeId &, const NodeId &, LinkArray &);
+    virtual Edge* deleteEdgeWithoutDeletePtr(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray);
 
     virtual void cleanLinkArray();
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost);
+    virtual void addEdge(const NodeId & dest_node, Edge *);
     virtual void deleteEdge(const NodeId &, const NodeId &);
     virtual void setRoot(const NodeId & dest_node);
     virtual void run(const int &, const LinkArray &, RouteMap &);

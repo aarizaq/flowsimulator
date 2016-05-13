@@ -108,14 +108,18 @@ void CallApp::readTopo()
      test.setRoot(0);
      test.runDisjoint(7);
      */
+    Dijkstra dj;
     for (int i = 0; i < topo.getNumNodes(); i++) {
         cTopology::Node *node = topo.getNode(i);
         int address = node->getModule()->par("address");
         for (int j = 0; j < node->getNumOutLinks(); j++) {
             int addressAux = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
             dijFuzzy->addEdge(address, addressAux, 1, 2, 3);
+            dj.addEdge(address, addressAux,1);
         }
     }
+    Dijkstra::LinkArray links;
+    dj.discoverAllPartitionedLinks(links);
 }
 
 void CallApp::rescheduleEvent()
@@ -408,7 +412,7 @@ void CallApp::handleMessage(cMessage *msg)
             double cost = 1 / residual;
 
             if (residual > 1e20)
-                dijFuzzy->eraseEdge(pk->getSrcAddr(), pk->getLinkData(i).node);
+                dijFuzzy->deleteEdge(pk->getSrcAddr(), pk->getLinkData(i).node);
             else {
                 double cost1 = 1 / (residual + 100);
                 double cost2 = 1 / (residual - 100);

@@ -99,8 +99,8 @@ private:
     std::map<FlowIdentification,FlowStat> flowStatistics;
 
     typedef std::map<int, unsigned long int> SequenceTable;
-    std::map<simtime_t, CallInfo*> CallEvents;
-    std::map<simtime_t, FlowEvent*> FlowEvents;
+    std::multimap<simtime_t, CallInfo*> CallEvents;
+    std::multimap<simtime_t, FlowEvent*> FlowEvents;
     DijkstraFuzzy *dijFuzzy = nullptr;
     SequenceTable sequenceTable;
 

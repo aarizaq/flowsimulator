@@ -36,7 +36,7 @@ class failureModule : public cSimpleModule
         FAILURE, RECOVERY
     };
 
-    typedef std::map<simtime_t, Event> EventList;
+    typedef std::multimap<simtime_t, Event> EventList;
     EventList eventList;
     cMessage *timer;
     simsignal_t eventSignal;

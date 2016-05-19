@@ -118,7 +118,7 @@ void CallApp::readTopo()
             dj.addEdge(address, addressAux,1);
         }
     }
-    Dijkstra::LinkArray links;
+    NodePairs links;
     dj.discoverAllPartitionedLinks(links);
 }
 

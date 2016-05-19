@@ -104,6 +104,22 @@ void DijkstraFuzzy::addEdge(const NodeId & originNode, const NodeId & last_node,
     linkArray[originNode].push_back(link);
 }
 
+void DijkstraFuzzy::addEdge(const NodeId & originNode, Edge *edge)
+{
+    LinkArray::iterator it;
+    it = linkArray.find(originNode);
+    if (it != linkArray.end()) {
+        for (unsigned int i = 0; i < it->second.size(); i++) {
+            if (edge->last_node() == it->second[i]->last_node_) {
+                delete it->second[i];
+                it->second[i] = edge;
+                return;
+            }
+        }
+    }
+    linkArray[originNode].push_back(edge);
+}
+
 void DijkstraFuzzy::deleteEdge(const NodeId & originNode, const NodeId & last_node)
 {
     LinkArray::iterator it;
@@ -121,7 +137,7 @@ void DijkstraFuzzy::deleteEdge(const NodeId & originNode, const NodeId & last_no
 }
 
 
-void DijkstraFuzzy::deleteEdgeWithoutDeletePtr(const NodeId & originNode, const NodeId & last_node)
+DijkstraFuzzy::Edge * DijkstraFuzzy::removeEdge(const NodeId & originNode, const NodeId & last_node)
 {
     LinkArray::iterator it;
     it = linkArray.find(originNode);
@@ -130,10 +146,11 @@ void DijkstraFuzzy::deleteEdgeWithoutDeletePtr(const NodeId & originNode, const 
             Edge *edge = *itAux;
             if (last_node == edge->last_node_) {
                 it->second.erase(itAux);
-                return;
+                return edge;
             }
         }
     }
+    return nullptr;
 }
 
 void DijkstraFuzzy::setRoot(const NodeId & dest_node)
@@ -436,6 +453,21 @@ void DijkstraFuzzy::runDisjoint(const NodeId &target)
         throw cRuntimeError("Imposible encontrar ruta");
     }
     // test
+    if (!getHasFindDisjoint()) {
+        discoverAllPartitionedLinks(partitionLinks);
+        setHasFindDisjoint(true);
+    }
+    // check if partition links
+    NodePairs pairs;
+    for (unsigned int i = 0; i < minPath.size()-1; i++) {
+        auto itAux = std::find(partitionLinks.begin(),partitionLinks.end(),std::make_pair(minPath[i],minPath[i+1]));
+        if (itAux !=  partitionLinks.end()) {
+            pairs.push_back(*itAux);
+        }
+    }
+    if (!pairs.empty()) {// critical link it is necessary search the route in other form
+
+    }
 
     int test[12];
     int test2[12];
@@ -445,6 +477,8 @@ void DijkstraFuzzy::runDisjoint(const NodeId &target)
         throw cRuntimeError("quitar test");
     for (unsigned int i = 0; i < minPath.size(); i++)
         test[i] = minPath[i];
+    // comprobar si la ruta usa enlaces que particionan la red.
+
     LinkArray linkArrayMod = linkArray;
     // creamos el nuevo mapa
     for (unsigned int i = 0; i < minPath.size() - 1; i++) {
@@ -948,6 +982,18 @@ void DijkstraFuzzy::Pair_Paths(const Route &S, const Route &Sp, BreaksVect &Vect
 
 }
 
+void DijkstraFuzzy::discoverAllPartitionedLinks(const LinkArray & topo, NodePairs &links)
+{
+    Dijkstra dj;
+    for (auto elem : topo) {
+        for (auto elem2 : elem.second) {
+            dj.addEdge(elem.first,elem2->last_node(),1);
+        }
+    }
+    dj.discoverAllPartitionedLinks(links);
+}
+
+
 Dijkstra::State::State()
 {
     idPrev = UndefinedAddr;
@@ -1041,7 +1087,7 @@ void Dijkstra::deleteEdge(const NodeId & originNode, const NodeId & last_node, L
     }
 }
 
-Dijkstra::Edge * Dijkstra::deleteEdgeWithoutDeletePtr(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray)
+Dijkstra::Edge * Dijkstra::removeEdge(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray)
 {
     auto it = linkArray.find(originNode);
     if (it != linkArray.end()) {
@@ -1209,7 +1255,7 @@ void Dijkstra::setFromTopo(const cTopology *topo)
     }
 }
 
-void Dijkstra::setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray & topo)
+/*void Dijkstra::setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray & topo)
 {
     cleanLinkArray();
     for (auto elem : topo) {
@@ -1227,9 +1273,9 @@ void Dijkstra::setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray & topo, LinkA
             addEdge(elem.first, elem2->last_node(), 1, linkArray);
 
     }
-}
+}*/
 
-void Dijkstra::discoverPartitionedLinks(std::vector<NodeId> &pathNode, const LinkArray & topo, LinkArray &links)
+void Dijkstra::discoverPartitionedLinks(std::vector<NodeId> &pathNode, const LinkArray & topo, NodePairs &links)
 {
 
     LinkArray topoAux = topo;
@@ -1258,15 +1304,16 @@ void Dijkstra::discoverPartitionedLinks(std::vector<NodeId> &pathNode, const Lin
         bool has = getRoute(nodeId, pathNode, routeMap);
         // include the link other time
         it->second.push_back(tempEdge);
-        if (!has)
-            addEdge(origin, nodeId, 1, links);
+        if (!has) {
+            links.push_back(std::make_pair(origin,nodeId));
+        }
     }
 }
 
-void Dijkstra::discoverAllPartitionedLinks(const LinkArray & topo, LinkArray &links)
+void Dijkstra::discoverAllPartitionedLinks(const LinkArray & topo, NodePairs &links)
 {
     LinkArray topoAux = topo;
-    std::vector<std::pair <NodeId, NodeId> > tested;
+    NodePairs tested;
     for (auto elem : topo)
     {
         NodeId node = elem.first;
@@ -1276,14 +1323,14 @@ void Dijkstra::discoverAllPartitionedLinks(const LinkArray & topo, LinkArray &li
             auto it1 = std::find(tested.begin(),tested.end(),std::make_pair(node, elem.second[i]->last_node()));
             if (it1 != tested.end())
                 continue;
-            Edge * edge = deleteEdgeWithoutDeletePtr(node, elem.second[i]->last_node(), topoAux);
+            Edge * edge = removeEdge(node, elem.second[i]->last_node(), topoAux);
             RouteMap routeMap;
             runUntil(elem.second[i]->last_node(), node, topoAux, routeMap);
             std::vector<NodeId> pathNode;
             bool has = getRoute(elem.second[i]->last_node(), pathNode, routeMap);
             if (!has) {
-                addEdge(node, elem.second[i]->last_node(), 1, links);
-                addEdge(elem.second[i]->last_node(), node, 1, links);
+                links.push_back(std::make_pair(node,elem.second[i]->last_node()));
+                links.push_back(std::make_pair(elem.second[i]->last_node(),node));
             }
             addEdge(node, edge, topoAux);
             tested.push_back(std::make_pair(node, elem.second[i]->last_node()));

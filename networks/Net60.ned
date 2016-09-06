@@ -33,6 +33,7 @@ network Net60
         rte[0].port++ <--> C <--> rte[1].port++;
         rte[1].port++ <--> C <--> rte[2].port++;
         rte[1].port++ <--> C <--> rte[4].port++;
+        rte[1].port++ <--> C <--> rte[7].port++;
         rte[3].port++ <--> C <--> rte[4].port++;
         rte[4].port++ <--> C <--> rte[5].port++;
         rte[4].port++ <--> C <--> rte[7].port++;

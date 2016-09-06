@@ -9,6 +9,8 @@
 #pragma warning(disable:4786)
 #endif
 
+#include <iostream>
+#include <fstream>
 #include "CallApp.h"
 #include "Packet_m.h"
 
@@ -120,6 +122,7 @@ void CallApp::readTopo()
     }
     NodePairs links;
     dj.discoverAllPartitionedLinks(links);
+
 }
 
 void CallApp::rescheduleEvent()
@@ -201,6 +204,37 @@ void CallApp::initialize()
     send(msg, "out");
 }
 
+void CallApp::checkAlg() {
+    callCounter++;
+    int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
+
+    // TODO: Include the source routing in the packet.
+    dijFuzzy->runDisjoint(destAddress);
+
+    DijkstraFuzzy::Route r1, r2, min;
+    DijkstraFuzzy::FuzzyCost cost;
+    dijFuzzy->getRoute(destAddress, min, cost);
+    if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
+        // guarda minimo y disjuntas
+        std::ofstream myfile;
+        myfile.open("rutas.txt", std::ios::out | std::ios::app);
+        myfile << "min :";
+        for (auto elem : min)
+            myfile << elem << "-";
+        myfile << "\n";
+        myfile << "dis1 :";
+        for (auto elem : r1)
+            myfile << elem << "-";
+        myfile << "\n";
+        myfile << "dis2 :";
+        for (auto elem : r2)
+            myfile << elem << "-";
+        myfile << "\n";
+    }
+    if (!destAddresses.empty())
+        scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
+}
+
 void CallApp::handleMessage(cMessage *msg)
 {
     char pkname[100];
@@ -208,8 +242,11 @@ void CallApp::handleMessage(cMessage *msg)
         if (msg == generateCall) {
             // Sending packet
             callCounter++;
-            int destAddress = destAddresses[intuniform(0,
-                    destAddresses.size() - 1)];
+            if (check) {
+                checkAlg();
+                return;
+            }
+            int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
 
             sprintf(pkname, "CallReserve-%d-to-%d-Call id#%lud-Did-%ld", myAddress,
                     destAddress, callIdentifier, par("sourceId").longValue());
@@ -228,7 +265,7 @@ void CallApp::handleMessage(cMessage *msg)
             pk->setDestinationId(par("destinationId"));
 
             // TODO: Include the source routing in the packet.
-            // dijFuzzy->runDisjoint(destAddress);
+            dijFuzzy->runDisjoint(destAddress);
 
             // TODO : recall timer,
 
@@ -242,8 +279,7 @@ void CallApp::handleMessage(cMessage *msg)
         }
         else if (msg == nextFlow) {
             // generate the next flow
-            int destAddress = destAddresses[intuniform(0,
-                    destAddresses.size() - 1)];
+            int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
             Packet *pkFlow = new Packet();
 
 

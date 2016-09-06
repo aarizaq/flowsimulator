@@ -273,7 +273,7 @@ public:
     virtual void run();
     virtual void run(const LinkArray &linkArray, RouteMap&, MapRoutes&);
     virtual void runUntil(const NodeId &, const LinkArray &linkArray, RouteMap&, MapRoutes&);
-    virtual void runDisjoint(const NodeId & rootNode, const NodeId &target, NodePairs &partitionLinks, RouteMap &routeMap,const LinkArray &linkArray);
+    virtual void runDisjoint(const NodeId & rootNode, const NodeId &target, NodePairs &partitionLinks, RouteMap &routeMap,const LinkArray &linkArray, MapRoutes &kRoutesMap);
     virtual void runDisjoint(const NodeId &target);
     virtual int getNumRoutes(const NodeId &nodeId);
     virtual bool getRoute(const NodeId &nodeId, std::vector<NodeId> &, FuzzyCost &);

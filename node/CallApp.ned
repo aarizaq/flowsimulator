@@ -29,7 +29,7 @@ simple CallApp like IApp
         volatile double TimeOff @unit(s) = default(exponential(1s)); // time between generating packets, can be 0 in in this case the flow can change the bandwith used
         volatile double usedBandwith @unit(bps);  //
         
-        // independent flows
+        // independent flows, flows that aren't associated to calls
         bool independentFlows = default(false);
         volatile double flowArrival @unit(s) = default(exponential(1s));
         volatile double flowDuration @unit(s) = default(exponential(1s));

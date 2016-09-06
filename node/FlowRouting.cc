@@ -24,7 +24,49 @@ FlowRouting::~FlowRouting()
 {
     cancelAndDelete(actualizeTimer);
     callInfomap.clear();
-    portData.clear();
+    portDataArray.clear();
+}
+void FlowRouting::computeUsedBw()
+{
+    simtime_t beginInteval = simTime() - computationInterval;
+    for (auto &elem : portDataArray) {
+        simtime_t previous = beginInteval;
+        double total = 0;
+        double min = elem.nominalbw;
+        double max = 0;
+        if (elem.changeRegister.size() == 1) {
+            simtime_t time = simTime() - elem.changeRegister.front().instant;
+            double valP = elem.changeRegister.front().value * (time.dbl()/computationInterval.dbl());
+            if (max < elem.changeRegister.front().value)
+                max = elem.changeRegister.front().value;
+            if (min > elem.changeRegister.front().value)
+                min = elem.changeRegister.front().value;
+            total += valP;
+        }
+        else {
+            for (unsigned int i = 0; i < elem.changeRegister.size() - 1; i++) {
+                simtime_t time = elem.changeRegister[i].instant - elem.changeRegister[i + 1].instant;
+                uint64_t val = elem.changeRegister[i].value;
+                double valP = val * (time.dbl()/computationInterval.dbl());
+                total += valP;
+                if (max < elem.changeRegister[i].value)
+                    max = elem.changeRegister[i].value;
+                if (min > elem.changeRegister[i].value)
+                    min = elem.changeRegister[i].value;
+            }
+        }
+
+        if (!elem.changeRegister.empty()) {
+            auto elem2 = elem.changeRegister.back();
+            elem2.instant = simTime();
+            elem.changeRegister.clear();
+            elem.changeRegister.push_back(elem2);
+        }
+        elem.mean = total;
+        elem.min = min;
+        elem.max = max;
+    }
+    scheduleAt(simTime()+computationInterval,computeBwTimer);
 }
 
 void FlowRouting::initialize()
@@ -77,16 +119,21 @@ void FlowRouting::initialize()
     }
 
     cModule *node = this->getParentModule();
-    portData.resize(this->gateSize("in"));
+    portDataArray.resize(this->gateSize("in"));
 
-    for (unsigned int i = 0; i < portData.size(); i++) {
+    for (unsigned int i = 0; i < portDataArray.size(); i++) {
         cChannel * channel = node->gate("port$o", i)->getTransmissionChannel();
-        portData[i].occupation = channel->getNominalDatarate();
-        portData[i].flowOcupation = channel->getNominalDatarate();
-        portData[i].nominalbw = channel->getNominalDatarate();
-        portData[i].portStatus = UP;
-        portData[i].overload = false;
+        portDataArray[i].occupation = channel->getNominalDatarate();
+        portDataArray[i].flowOcupation = channel->getNominalDatarate();
+        portDataArray[i].nominalbw = channel->getNominalDatarate();
+        portDataArray[i].portStatus = UP;
+        portDataArray[i].overload = false;
+        ChangeBw val;
+        val.instant = simTime();
+        val.value = portDataArray[i].flowOcupation;
+        portDataArray[i].changeRegister.push_back(val);
     }
+    actualizePercentaje();
     delete topo;
     localOutSize = this->gateSize("localOut");
 
@@ -95,11 +142,17 @@ void FlowRouting::initialize()
         flowDist = check_and_cast<BaseFlowDistribution*>(createOne(flowClass));
 
     actualizeTimer = new cMessage("actualize timer");
+    computeBwTimer = new cMessage("actualize bw timer");
+    scheduleAt(simTime()+computationInterval,computeBwTimer);
     //scheduleAt(simTime(), actualizeTimer);
 }
 
 bool FlowRouting::actualize(Actualize *other)
 {
+    if (par("actPercentage")) {
+        return actualizePercentaje();
+    }
+
     if (other) { // check first if attach information
         simtime_t now = simTime();
         if (SIMTIME_DBL(now - lastTimeActualize) < par("minimumTimeActualize").doubleValue())
@@ -120,16 +173,21 @@ bool FlowRouting::actualize(Actualize *other)
         LinkData auxdata;
         auxdata.node = elem.first;
         if (elem.second.state == UP) {
-            auxdata.residual = portData[elem.second.port].occupation;
-            auxdata.nominal = portData[elem.second.port].nominalbw;
-            portData[elem.second.port].lastInfoOcupation = portData[elem.second.port].occupation;
-            portData[elem.second.port].lastInfoNominal = portData[elem.second.port].nominalbw;
+            auxdata.residual = portDataArray[elem.second.port].occupation;
+            auxdata.nominal = portDataArray[elem.second.port].nominalbw;
+            auxdata.max = portDataArray[elem.second.port].max;
+            auxdata.min = portDataArray[elem.second.port].min;
+            auxdata.mean = portDataArray[elem.second.port].mean;
+            portDataArray[elem.second.port].lastInfoOcupation = portDataArray[elem.second.port].occupation;
+            portDataArray[elem.second.port].lastInfoNominal = portDataArray[elem.second.port].nominalbw;
         }
         else if (elem.second.state == DOWN) {
             auxdata.residual = 0;
             auxdata.nominal = 0;
-            portData[elem.second.port].lastInfoOcupation = 0;
-            portData[elem.second.port].lastInfoNominal = 0;
+            if (portDataArray[elem.second.port].lastInfoNominal !=0) {
+                portDataArray[elem.second.port].lastInfoOcupation = 0;
+                portDataArray[elem.second.port].lastInfoNominal = 0;
+            }
         }
         pkt->setLinkData(elem.second.port, auxdata);
     }
@@ -146,6 +204,66 @@ bool FlowRouting::actualize(Actualize *other)
     return true;
 }
 
+bool FlowRouting::actualizePercentaje()
+{
+    if (!par("actPercentage"))
+        return false;
+
+    if (SIMTIME_DBL(simTime() - lastTimeActualize) < par("minimumTimeActualize").doubleValue())
+            return false;
+
+    std::vector<LinkData> statedata;
+    for (auto elem : neighbors) {
+        LinkData auxdata;
+        auxdata.node = elem.first;
+        if (elem.second.state == UP) {
+            if ((fabs((double)portDataArray[elem.second.port].lastInfoOcupation - (double)portDataArray[elem.second.port].occupation)/(double)portDataArray[elem.second.port].occupation)>par("percentage").doubleValue()) {
+                auxdata.residual = portDataArray[elem.second.port].occupation;
+                auxdata.nominal = portDataArray[elem.second.port].nominalbw;
+                portDataArray[elem.second.port].lastInfoOcupation = portDataArray[elem.second.port].occupation;
+                portDataArray[elem.second.port].lastInfoNominal = portDataArray[elem.second.port].nominalbw;
+                statedata.push_back(auxdata);
+            }
+        }
+        else if (elem.second.state == DOWN) {
+            auxdata.residual = 0;
+            auxdata.nominal = 0;
+            if (portDataArray[elem.second.port].lastInfoNominal !=0) {
+                portDataArray[elem.second.port].lastInfoOcupation = 0;
+                portDataArray[elem.second.port].lastInfoNominal = 0;
+                statedata.push_back(auxdata);
+            }
+        }
+    }
+
+
+    if (statedata.empty())
+        return false;
+
+    char pkname[40];
+    sprintf(pkname, "Actualize-%d", myAddress);
+    Actualize *pkt = new Actualize(pkname);
+
+    pkt->setSourceId(myAddress);
+    pkt->setDestAddr(-1);
+    pkt->setType(ACTUALIZE);
+    pkt->setLinkDataArraySize(statedata.size());
+    pkt->setSequence(seqnum++);
+
+    for (unsigned int i = 0; i < statedata.size(); i++) {
+        pkt->setLinkData(i, statedata[i]);
+    }
+
+    for (int i = 0; i < localOutSize; i++)
+        send(pkt->dup(), "localOut", i);
+
+    for (auto elem : neighbors)
+        send(pkt->dup(), "out", elem.second.port);
+
+    lastTimeActualize = simTime();
+    delete pkt;
+    return true;
+}
 
 void FlowRouting::getListFlowsToModifyStartFlow(const int &port,  std::vector<FlowInfo *> &listFlows,  std::vector<FlowInfo *> &listFlowsInput)
 {
@@ -238,8 +356,7 @@ void FlowRouting::procBroadcast(Base *pkbase)
         packets.pop_back();
     }
 
-    if (!actualize(dynamic_cast<Actualize*>(pkbase))) // in case that actualize take the control the method will delete the packet
-            {
+    if (!actualize(dynamic_cast<Actualize*>(pkbase))) {// in case that actualize take the control the method will delete the packet
         for (auto elem : neighbors) {
             if (gateIndex != elem.second.port && elem.second.state == UP)
                 send(pkbase->dup(), "out", elem.second.port);
@@ -289,14 +406,18 @@ bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
 
     FlowInfo *outflowPtr = nullptr;
     if (itF != outputFlows.end()) {
-        portData[itF->second.port].flowOcupation += itF->second.used;
+        portDataArray[itF->second.port].flowOcupation += itF->second.used;
         itF->second.port = portForward;
         outflowPtr = &(itF->second);
+        ChangeBw val;
+        val.instant = simTime();
+        val.value = portDataArray[itF->second.port].flowOcupation;
+        portDataArray[itF->second.port].changeRegister.push_back(val);
     }
     flow.port = portForward;
 
     if (portForward != -1) {
-        if (portData[portForward].flowOcupation > pkt->getReserve()) {
+        if (portDataArray[portForward].flowOcupation > pkt->getReserve()) {
             outputFlows[flow.identify] = flow;
         }
         else {
@@ -398,9 +519,9 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     for (auto & elem : neighbors) {
                         elem.second.state = DOWN;
                     }
-                    for (unsigned int i = 0; i < portData.size(); i++) {
-                        portData[i].occupation = 0;
-                        portData[i].portStatus = DOWN;
+                    for (unsigned int i = 0; i < portDataArray.size(); i++) {
+                        portDataArray[i].occupation = 0;
+                        portDataArray[i].portStatus = DOWN;
                         //lastInfoOcupation[i] = ocupation[i];
                         //lastInfoNominal[i] = nominalbw[i];
                     }
@@ -503,14 +624,20 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     for (auto & elem : neighbors) {
                         elem.second.state = UP;
                     }
-                    for (unsigned int i = 0; i < portData.size(); i++) {
-                        portData[i].occupation = portData[i].nominalbw;
-                        portData[i].flowOcupation = portData[i].nominalbw;
-                        portData[i].portStatus = UP;
+                    for (unsigned int i = 0; i < portDataArray.size(); i++) {
+                        portDataArray[i].occupation = portDataArray[i].nominalbw;
+                        portDataArray[i].flowOcupation = portDataArray[i].nominalbw;
+                        portDataArray[i].portStatus = UP;
+                        ChangeBw val;
+                        val.instant = simTime();
+                        val.value = portDataArray[i].flowOcupation;
+                        portDataArray[i].changeRegister.push_back(val);
+                        actualizePercentaje();
                     }
-                    if (inmediateNotificationLink)
-                        actualize(nullptr);
                 }
+                if (inmediateNotificationLink)
+                    actualize(nullptr);
+                actualizePercentaje();
                 return;
             }
             // failure a link in the actual node
@@ -520,7 +647,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     throw cRuntimeError("Neighbor address not found check break event list");
                 // search in the list the flows and active calls
                 itNeig->second.state = DOWN;
-                portData[itNeig->second.port].portStatus = DOWN;
+                portDataArray[itNeig->second.port].portStatus = DOWN;
                 itNeig->second.failureTime = simTime();
                 std::vector<std::pair<int, int> > breakCommunication;
                 for (auto itCallInfo = callInfomap.begin(); itCallInfo != callInfomap.end(); ++itCallInfo) {
@@ -537,7 +664,11 @@ void FlowRouting::processLinkEvents(cObject *obj)
                             itCallInfo->second.outputFlows.pop_back();
                             if (flowinfo.port != itNeig->second.port) {
                                 // free bandwidth
-                                portData[flowinfo.port].flowOcupation += flowinfo.used;
+                                portDataArray[flowinfo.port].flowOcupation += flowinfo.used;
+                                ChangeBw val;
+                                val.instant = simTime();
+                                val.value = portDataArray[flowinfo.port].flowOcupation;
+                                portDataArray[flowinfo.port].changeRegister.push_back(val);
                                 // Send end flow
                                 Packet *pkt = new Packet();
                                 pkt->setType(ENDFLOW);
@@ -584,7 +715,6 @@ void FlowRouting::processLinkEvents(cObject *obj)
                         pkt->setCallId(itCallInfo->first);
                         pkt->setType(RELEASE);
 
-
                         if (itCallInfo->second.node1 == myAddress && itCallInfo->second.node2 == myAddress) {
                             // se envía hacia el destino, se comprueba
 
@@ -622,18 +752,17 @@ void FlowRouting::processLinkEvents(cObject *obj)
                         itCallInfo->second.state = END;
                     }
                 }
-
                 for (auto it = inputFlows.begin(); it != inputFlows.end();) {
                     if ((it->second.port != -1 && it->second.portInput != -1)
-                            && (portData[it->second.port].portStatus == UP && portData[it->second.portInput].portStatus == UP)) {
+                            && (portDataArray[it->second.port].portStatus == UP && portDataArray[it->second.portInput].portStatus == UP)) {
                         ++it;
                         continue;
                     }
-                    else if ((it->second.port != -1) && (portData[it->second.port].portStatus == UP)) {
+                    else if ((it->second.port != -1) && (portDataArray[it->second.port].portStatus == UP)) {
                         ++it;
                         continue;
                     }
-                    else if ((it->second.portInput != -1) && (portData[it->second.portInput].portStatus == UP)) {
+                    else if ((it->second.portInput != -1) && (portDataArray[it->second.portInput].portStatus == UP)) {
                         ++it;
                         continue;
                     }
@@ -654,24 +783,22 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     }
                     inputFlows.erase(it++);
                 }
-
-
                 for (auto it = outputFlows.begin(); it != outputFlows.end();) {
                     if ((it->second.port != -1 && it->second.portInput != -1)
-                            && (portData[it->second.port].portStatus == UP && portData[it->second.portInput].portStatus == UP)) {
+                            && (portDataArray[it->second.port].portStatus == UP && portDataArray[it->second.portInput].portStatus == UP)) {
                         ++it;
                         continue;
                     }
-                    else if ((it->second.port != -1) && (portData[it->second.port].portStatus == UP)) {
+                    else if ((it->second.port != -1) && (portDataArray[it->second.port].portStatus == UP)) {
                         ++it;
                         continue;
                     }
-                    else if ((it->second.portInput != -1) && (portData[it->second.portInput].portStatus == UP)) {
+                    else if ((it->second.portInput != -1) && (portDataArray[it->second.portInput].portStatus == UP)) {
                         ++it;
                         continue;
                     }
                     // send end flow to the other part
-                    if (portData[it->second.port].portStatus == UP) {
+                    if (portDataArray[it->second.port].portStatus == UP) {
                         // send end flow to application {
                         Packet *pkt = new Packet();
                         pkt->setCallId(0);
@@ -691,9 +818,6 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     }
                     outputFlows.erase(it++);
                 }
-
-                if (inmediateNotificationLink)
-                    actualize(nullptr);
             }
             else if (event->type == NODE_RECOVERY_EV || event->type == LINK_RECOVERY_EV) {
                 //
@@ -701,15 +825,15 @@ void FlowRouting::processLinkEvents(cObject *obj)
                 if (itNeig == neighbors.end())
                     throw cRuntimeError("Neighbor address not found check break event list");
                 itNeig->second.state = UP;
-                portData[itNeig->second.port].portStatus = UP;
+                portDataArray[itNeig->second.port].portStatus = UP;
 
                 std::vector<FlowInfo *> listFlowsToModify;
                 std::vector<FlowInfo *> listFlowsToModifyInput;
                 getListFlowsToModifyStartFlow(itNeig->second.port, listFlowsToModify,listFlowsToModifyInput);
 
-                if (portData[itNeig->second.port].occupation != portData[itNeig->second.port].nominalbw)
+                if (portDataArray[itNeig->second.port].occupation != portDataArray[itNeig->second.port].nominalbw)
                     throw cRuntimeError("Restore link, ocupation %llu nominal %llu",
-                            portData[itNeig->second.port].occupation, portData[itNeig->second.port].nominalbw);
+                            portDataArray[itNeig->second.port].occupation, portDataArray[itNeig->second.port].nominalbw);
 
                 if (!listFlowsToModifyInput.empty()) {
                     // TODO: Gestionar microcortes
@@ -721,9 +845,11 @@ void FlowRouting::processLinkEvents(cObject *obj)
                 }
                 // if (simTime() - itNeig->second.failureTime > par("breakRelease"))
                 //     ocupation[itNeig->second.port] = nominalbw[itNeig->second.port];
-                if (inmediateNotificationLink)
-                    actualize(nullptr);
+
             }
+            if (inmediateNotificationLink)
+                actualize(nullptr);
+            actualizePercentaje();
         }
     }
 }
@@ -747,7 +873,7 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
             if (it != rtable.end())
                 port1 = (*it).second;
             // check port status
-            if (port1 != -1 && portData[port1].portStatus == DOWN)
+            if (port1 != -1 && portDataArray[port1].portStatus == DOWN)
                 rejected = true;
         }
         else {
@@ -779,8 +905,8 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
         port2 = pk->getArrivalGate()->getIndex();
     }
 
-    if ((port1 != -1 && portData[port1].occupation < pk->getReserve())
-            && (port2 != -1 && portData[port2].occupation < pk->getReserve()))
+    if ((port1 != -1 && portDataArray[port1].occupation < pk->getReserve())
+            && (port2 != -1 && portDataArray[port2].occupation < pk->getReserve()))
         rejected = true;
 
     if (port1 == -1 && destAddr != myAddress)
@@ -818,10 +944,12 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
 
     // enough resources, bandwidth reserved.
     if (port1 != -1)
-        portData[port1].occupation -= pk->getReserve();
+        portDataArray[port1].occupation -= pk->getReserve();
 
     if (port2 != -1)
-        portData[port2].occupation -= pk->getReserve();
+        portDataArray[port2].occupation -= pk->getReserve();
+
+    actualizePercentaje();
 
     CallInfo callInfo;
     callInfo.node1 = pk->getSrcAddr();
@@ -928,9 +1056,13 @@ void FlowRouting::checkPendingList()
                 continue;
             }
 
-            if (it->port != -1 && portData[it->port].flowOcupation > it->used && portData[it->port].portStatus == UP) {
+            if (it->port != -1 && portDataArray[it->port].flowOcupation > it->used && portDataArray[it->port].portStatus == UP) {
 
-                portData[it->port].flowOcupation -= it->used;
+                portDataArray[it->port].flowOcupation -= it->used;
+                ChangeBw val;
+                val.instant = simTime();
+                val.value = portDataArray[it->port].flowOcupation;
+                portDataArray[it->port].changeRegister.push_back(val);
                 Packet *pkStartFlow = new Packet();
 
                 if (it->identify.callId() > 0) {
@@ -1029,7 +1161,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
                      else
                      portData[itCallInfo->second.port1].occupation += itCallInfo->second.reserve;*/
                     //
-                    portData[itCallInfo->second.port1].occupation += itCallInfo->second.reserve;
+                    portDataArray[itCallInfo->second.port1].occupation += itCallInfo->second.reserve;
                 }
 
                 if (itCallInfo->second.port2 >= 0) {
@@ -1049,7 +1181,8 @@ bool FlowRouting::preProcPacket(Packet *pk)
                      portData[itCallInfo->second.port2].occupation[itCallInfo->second.port2] += itCallInfo->second.reserve;
                      else
                      portData[itCallInfo->second.port2].occupation[itCallInfo->second.port2] += itCallInfo->second.reserve;*/
-                    portData[itCallInfo->second.port2].occupation += itCallInfo->second.reserve;
+                    portDataArray[itCallInfo->second.port2].occupation += itCallInfo->second.reserve;
+                    actualizePercentaje();
                 }
                 // send packet to next node
                 if (pk->getKind() >= 0)
@@ -1062,6 +1195,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
                     throw cRuntimeError("flows list is not empty");
                 callInfomap.erase(itCallInfo);
                 checkPendingList();
+                actualizePercentaje();
                 return false;
             }
         }
@@ -1147,8 +1281,13 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
             auto itFlow = outputFlows.find(flowId);
             if (itFlow != outputFlows.end()) {
                 // reset bandwidth
-                if (portData[itFlow->second.port].portStatus == UP)
-                    portData[itFlow->second.port].flowOcupation += itFlow->second.used;
+                if (portDataArray[itFlow->second.port].portStatus == UP) {
+                    portDataArray[itFlow->second.port].flowOcupation += itFlow->second.used;
+                    ChangeBw val;
+                    val.instant = simTime();
+                    val.value = portDataArray[itFlow->second.port].flowOcupation;
+                    portDataArray[itFlow->second.port].changeRegister.push_back(val);
+                }
             }
         }
         else {
@@ -1166,20 +1305,20 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
     // check if port is up and if there is enough bandwidth unreserved for not oriented flows.
     if (portForward != -1) {
 
-        if (portData[portForward].portStatus == DOWN) {
+        if (portDataArray[portForward].portStatus == DOWN) {
             delete pk;
             return false;
         }
 
         // limits for not oriented flows
         if (!isCallOriented) {
-            double limitcall = (double) portData[portForward].nominalbw * reserveCall;
-            if (limitcall > 0 && limitcall <= (double) portData[portForward].occupation) {
+            double limitcall = (double) portDataArray[portForward].nominalbw * reserveCall;
+            if (limitcall > 0 && limitcall <= (double) portDataArray[portForward].occupation) {
                 delete pk;
                 return false;
             }
-            double limitflow = (double) portData[portForward].nominalbw * reserveFlows;
-            if (limitflow > 0 && limitflow <= (double) portData[portForward].flowOcupation) {
+            double limitflow = (double) portDataArray[portForward].nominalbw * reserveFlows;
+            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOcupation) {
                 delete pk;
                 return false;
             }
@@ -1188,8 +1327,13 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
 
     // consume bandwidth
     if (portForward != -1) {
-        if (portData[portForward].flowOcupation > pk->getReserve()) {
-            portData[portForward].flowOcupation -= pk->getReserve();
+        if (portDataArray[portForward].flowOcupation > pk->getReserve()) {
+            portDataArray[portForward].flowOcupation -= pk->getReserve();
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[portForward].flowOcupation;
+            portDataArray[portForward].changeRegister.push_back(val);
+
             if (itCallInfo != callInfomap.end())
                 itCallInfo->second.outputFlows.push_back(flowInfo);
             else
@@ -1273,12 +1417,17 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
         std::vector<FlowInfo *> listFlowsToModifyInput;
         getListFlowsToModifyStartFlow(flowInfoInputPtr->port, listFlowsToModify, listFlowsToModifyInput);
         if (flowDist != nullptr) {
-            if (flowDist->startShare(listFlowsToModify, listFlowsToModifyInput, portData[portForward].nominalbw)) {
+            if (flowDist->startShare(listFlowsToModify, listFlowsToModifyInput, portDataArray[portForward].nominalbw)) {
                 uint64_t oc = 0;
                 for (auto elem : listFlowsToModify)
                     oc += elem->used;
-                portData[portForward].flowOcupation = portData[portForward].nominalbw - oc;
-                portData[portForward].overload = true;
+                portDataArray[portForward].flowOcupation = portDataArray[portForward].nominalbw - oc;
+                portDataArray[portForward].overload = true;
+                ChangeBw val;
+                val.instant = simTime();
+                val.value = portDataArray[portForward].flowOcupation;
+                portDataArray[portForward].changeRegister.push_back(val);
+
                 // enviar mensajes de actualización del flujo.
                 for (auto itAux = listFlowsToModify.begin(); itAux != listFlowsToModify.end(); ++itAux) {
                     //
@@ -1331,9 +1480,7 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
         }
     }
 
-
     FlowIdentification flowId;
-
     flowId.flowId() = pk->getFlowId();
     flowId.src() = pk->getSrcAddr();
     flowId.callId() = pk->getCallId();
@@ -1401,28 +1548,32 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
         return false;
     }
 
-
     // check if port is up and if there is enough bandwidth unreserved for not oriented flows.
     if (portForward != -1) {
 
-        if (portData[portForward].portStatus == DOWN) {
+        if (portDataArray[portForward].portStatus == DOWN) {
             delete pk;
             return false;
         }
 
         // free the used bandwidth
-        if (flowInfoOutputPtr)
-            portData[portForward].flowOcupation += flowInfoOutputPtr->used;
+        if (flowInfoOutputPtr) {
+            portDataArray[portForward].flowOcupation += flowInfoOutputPtr->used;
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[portForward].flowOcupation;
+            portDataArray[portForward].changeRegister.push_back(val);
+        }
 
         // limits for not oriented flows
         if (!isCallOriented) {
-            double limitcall = (double) portData[portForward].nominalbw * reserveCall;
-            if (limitcall > 0 && limitcall <= (double) portData[portForward].occupation) {
+            double limitcall = (double) portDataArray[portForward].nominalbw * reserveCall;
+            if (limitcall > 0 && limitcall <= (double) portDataArray[portForward].occupation) {
                 delete pk;
                 return false;
             }
-            double limitflow = (double) portData[portForward].nominalbw * reserveFlows;
-            if (limitflow > 0 && limitflow <= (double) portData[portForward].flowOcupation) {
+            double limitflow = (double) portDataArray[portForward].nominalbw * reserveFlows;
+            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOcupation) {
                 delete pk;
                 return false;
             }
@@ -1431,8 +1582,12 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
 
     // consume bandwidth
     if (portForward != -1) {
-        if (portData[portForward].flowOcupation > pk->getReserve()) {
-            portData[portForward].flowOcupation -= pk->getReserve();
+        if (portDataArray[portForward].flowOcupation > pk->getReserve()) {
+            portDataArray[portForward].flowOcupation -= pk->getReserve();
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[portForward].flowOcupation;
+            portDataArray[portForward].changeRegister.push_back(val);
             if (flowInfoOutputPtr != nullptr)
             {
                 flowInfoOutputPtr->used = pk->getReserve();
@@ -1489,8 +1644,13 @@ bool FlowRouting::procEndFlow(Packet *pk)
             return false;
             // throw cRuntimeError("Error Flow id not found reserved");
         }
-        if (it->port != -1)
-            portData[it->port].flowOcupation += it->used;
+        if (it->port != -1) {
+            portDataArray[it->port].flowOcupation += it->used;
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[it->port].flowOcupation;
+            portDataArray[it->port].changeRegister.push_back(val);
+        }
         itCallInfo->second.outputFlows.erase(it);
     }
     else
@@ -1515,7 +1675,11 @@ bool FlowRouting::procEndFlow(Packet *pk)
 
         inputFlows.erase(itFlowInput);
         if (itFlowOutput != outputFlows.end()) {
-            portData[itFlowOutput->second.port].flowOcupation += itFlowOutput->second.used;
+            portDataArray[itFlowOutput->second.port].flowOcupation += itFlowOutput->second.used;
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[itFlowOutput->second.port].flowOcupation;
+            portDataArray[itFlowOutput->second.port].changeRegister.push_back(val);
             outputFlows.erase(itFlowOutput);
         }
     }
@@ -1542,7 +1706,7 @@ void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId,
     }
     else {
         if (pk->getDestAddr() != -1) {
-            if (portData[portForward].portStatus == UP) {
+            if (portDataArray[portForward].portStatus == UP) {
                 EV << "forwarding packet " << pk->getName() << " on gate index " << portForward << endl;
                 pk->setHopCount(pk->getHopCount() + 1);
                 emit(outputIfSignal, portForward);
@@ -1564,6 +1728,10 @@ void FlowRouting::handleMessage(cMessage *msg)
 
     if (actualizeTimer == msg) {
         actualize();
+        return;
+    }
+    if (computeBwTimer == msg) {
+        computeUsedBw();
         return;
     }
 
@@ -1671,15 +1839,20 @@ void FlowRouting::handleMessage(cMessage *msg)
 
         if (pk->getType() == RELEASE || pk->getType() == REJECTED) {// reject and release free resources.
             if (itCallInfo->second.port1 >= 0)
-                portData[itCallInfo->second.port1].occupation += itCallInfo->second.reserve;
+                portDataArray[itCallInfo->second.port1].occupation += itCallInfo->second.reserve;
 
             if (itCallInfo->second.port2 >= 0)
-                portData[itCallInfo->second.port2].occupation += itCallInfo->second.reserve;
+                portDataArray[itCallInfo->second.port2].occupation += itCallInfo->second.reserve;
+            actualizePercentaje();
 
             // It is necessary to erase all flows of the same call
             // search, and delete flows
             for (auto elem : itCallInfo->second.outputFlows) {
-                portData[elem.port].flowOcupation += elem.used;
+                portDataArray[elem.port].flowOcupation += elem.used;
+                ChangeBw val;
+                val.instant = simTime();
+                val.value = portDataArray[elem.port].flowOcupation;
+                portDataArray[elem.port].changeRegister.push_back(val);
             }
             if (!pendingFlows.empty()) {
                 for (auto it = pendingFlows.begin(); it != pendingFlows.end();) {

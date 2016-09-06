@@ -148,6 +148,12 @@ struct CallInfo
     FlowInfoVector outputFlows;
 };
 
+struct ChangeBw
+{
+    simtime_t instant;
+    uint64_t value;
+};
+
 // structure that contains the information related to a port, bandwidth, occupation, status ...
 struct PortData
 {
@@ -158,6 +164,10 @@ struct PortData
     uint64_t lastInfoNominal;
     LinkState portStatus = UP;
     bool overload = false;
+    double mean = 0;
+    double min = 0;
+    double max = 0;
+    std::vector<ChangeBw> changeRegister;
 };
 
 

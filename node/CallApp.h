@@ -108,6 +108,7 @@ private:
     std::map<int, long double> sendBytes;
     std::map<uint64_t, CallInfo*> activeCalls;
 
+    bool check = true;
 public:
     CallApp();
     virtual ~CallApp();
@@ -117,6 +118,7 @@ protected:
     virtual void rescheduleEvent();
     virtual void initialize();
     virtual void handleMessage(cMessage *msg);
+    virtual void checkAlg();
 };
 
 #endif /* CALLAPP_H_ */

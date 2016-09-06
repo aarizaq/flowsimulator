@@ -19,7 +19,9 @@ struct LinkData
     double residual;
     double time;
     double nominal;
-    
+    double mean;
+    double min;
+    double max;
 }
 
 enum PacketCode

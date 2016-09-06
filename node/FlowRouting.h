@@ -30,6 +30,7 @@ private:
     typedef std::map<int, uint64_t> SequenceTable;
     typedef std::map<uint64_t, CallInfo> CallInfoMap;
     typedef std::map<FlowIdentification,FlowInfo> FlowInfoMap;
+    typedef std::vector<PortData> PortDataArray;
 
     // variables and containers
     int myAddress;
@@ -42,7 +43,7 @@ private:
 
     RoutingTable rtable;
 
-    std::vector<PortData> portData;
+    PortDataArray portDataArray;
 
     FlowInfoVector pendingFlows;
     FlowInfoMap inputFlows; // flows not assigned to a call
@@ -55,6 +56,7 @@ private:
     int localOutSize = 0;
 
     cMessage *actualizeTimer;
+    cMessage *computeBwTimer;
 
     DijkstraKshortest * dijkstra = nullptr;
 
@@ -66,10 +68,12 @@ private:
 
     BaseFlowDistribution * flowDist = nullptr;
 
+    simtime_t computationInterval = 5;
     ~FlowRouting();
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *) override;
 
     virtual bool actualize(Actualize * = nullptr);
+    virtual bool actualizePercentaje();
     virtual void processLinkEvents(cObject *msg);
     virtual void getListFlowsToModifyStartFlow(const int &, std::vector<FlowInfo *> &, std::vector<FlowInfo *> &);
     virtual bool procReserve(Packet *msg, int&, int&);
@@ -84,6 +88,7 @@ private:
     virtual bool procFlowChange(Packet *, const int&, const int&);
     virtual bool procEndFlow(Packet *);
     virtual void postProc(Packet *, const int&, const int&, const int &);
+    virtual void computeUsedBw();
 protected:
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;

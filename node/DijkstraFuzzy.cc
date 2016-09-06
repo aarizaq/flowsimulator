@@ -436,7 +436,7 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
     }
 }
 
-void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, NodePairs &partitionLinks, RouteMap &routeMap,const LinkArray &linkArray)
+void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, NodePairs &partitionLinks, RouteMap &routeMap,const LinkArray &linkArray, MapRoutes &kRoutesMap)
 {
     std::multiset<SetElem> heap;
     RouteMap routeMapdisj;
@@ -467,28 +467,74 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
             pairs.push_back(*itAux);
         }
     }
-    if (!pairs.empty()) {// critical link it is necessary search the route in other form
-        if (pairs.size() == 1 && minPath.size() >2) // busco, en otro caso no hago nada
-        {
-            // busco camino parciales.
-            // descompongo las rutas.
-            NodeId rootNodeAux = rootNode;
-            NodeId target1 = pairs.front().first;
-            NodeId root1 =  pairs.front().second;
-            runDisjoint(target1);
-
-
-            Route auxPath1;
-            Route auxPath2;
-
-
+    if (!pairs.empty()) { // critical link it is necessary search the route in other form
+        // busco camino parciales.
+        // descompongo las rutas.
+        NodeId target1 = pairs.front().first;
+        NodeId root1 = pairs.front().second;
+        RouteMap routeMapAux;
+        MapRoutes kRoutesMapAux;
+        Route auxPath1;
+        Route auxPath2;
+        if (rootNode != target1 && root1 != target) {
+            runDisjoint(rootNode, target1, partitionLinks, routeMap, linkArray, kRoutesMap);
+            runDisjoint(root1, target, partitionLinks, routeMapAux, linkArray, kRoutesMapAux);
+            auto it = kRoutesMap.find(target1);
+            auto itAux = kRoutesMapAux.find(target);
+            // extract routes and include it in the map
+            for (int i = 0; i < 2; i++) {
+                for (auto p = it->second[0].begin(); p != it->second[0].end(); ++p)
+                    auxPath1.push_back(*p);
+                for (auto p = it->second[1].begin(); p != it->second[1].end(); ++p)
+                    auxPath2.push_back(*p);
+            }
+            for (int i = 0; i < 2; i++) {
+                for (auto p = itAux->second[0].begin(); p != itAux->second[0].end(); ++p)
+                    auxPath1.push_back(*p);
+                for (auto p = itAux->second[1].begin(); p != itAux->second[1].end(); ++p)
+                    auxPath2.push_back(*p);
+            }
         }
-        else
-        {
-            // retornar no es posible encontrar rutas disjuntas para este camino
+        else if (rootNode == target1) {
+            runDisjoint(root1, target, partitionLinks, routeMapAux, linkArray, kRoutesMapAux);
+            auto itAux = kRoutesMapAux.find(target);
+            // extract routes and include it in the map
+            auxPath1.clear();
+            auxPath2.clear();
+            auxPath1.push_back(rootNode);
+            auxPath2.push_back(rootNode);
+            for (auto elem : itAux->second[0])
+                auxPath1.push_back(elem);
+            for (auto elem : itAux->second[1])
+                auxPath2.push_back(elem);
+        }
+        else if (root1 == target) {
+            runDisjoint(rootNode, target1, partitionLinks, routeMap, linkArray, kRoutesMap);
+            auto it = kRoutesMap.find(target1);
+            // extract routes and include it in the map
+            auxPath1.clear();
+            auxPath2.clear();
+            for (auto elem : it->second[0])
+                auxPath1.push_back(elem);
+            for (auto elem : it->second[1])
+                auxPath2.push_back(elem);
+            auxPath1.push_back(target);
+            auxPath2.push_back(target);
+        }
+        auto it = kRoutesMap.find(target);
+        if (it == kRoutesMap.end()) {
+            Kroutes rout;
+            rout.push_back(auxPath1);
+            rout.push_back(auxPath2);
+            kRoutesMap[target] = rout;
+        }
+        else {
+            it->second.clear();
+            it->second.push_back(auxPath1);
+            it->second.push_back(auxPath2);
         }
     }
-
+/*
     int test[12];
     int test2[12];
     for (int i = 0; i < 12; i++)
@@ -496,7 +542,7 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
     if (minPath.size() > 12)
         throw cRuntimeError("quitar test");
     for (unsigned int i = 0; i < minPath.size(); i++)
-        test[i] = minPath[i];
+        test[i] = minPath[i];*/
     // comprobar si la ruta usa enlaces que particionan la red.
 
     LinkArray linkArrayMod = linkArray;
@@ -543,10 +589,12 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
         // grafo particionado, no se pueden quitar todos los enlaces.
         throw cRuntimeError("Imposible encontrar ruta");
     }
+/*
     if (minPathD.size() > 12)
         throw cRuntimeError("quitar test");
     for (unsigned int i = 0; i < minPathD.size(); i++)
         test2[i] = minPathD[i];
+*/
 
     BreaksVect Vect_breaks;
     breaks(minPath, minPathD, Vect_breaks);
@@ -573,6 +621,7 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
         Kroutes rout;
         rout.push_back(gamma1);
         rout.push_back(gamma2);
+        kRoutesMap[target] = rout;
     }
     else
     {
@@ -584,148 +633,7 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
 
 void DijkstraFuzzy::runDisjoint(const NodeId &target)
 {
-    std::multiset<SetElem> heap;
-    RouteMap routeMapdisj;
-
-    Route minPath;
-    std::vector<DijkstraFuzzy::Edge*> tempEdges;
-
-    FuzzyCost cost;
-    if (!getRoute(target, minPath, cost)) {
-        run();
-    }
-
-    if (!getRoute(target, minPath, cost)) {
-        return;
-        // grafo particionado, no hay camino.
-        throw cRuntimeError("Imposible encontrar ruta");
-    }
-    // test
-    if (!getHasFindDisjoint()) {
-        discoverAllPartitionedLinks(partitionLinks);
-        setHasFindDisjoint(true);
-    }
-    // check if partition links
-    NodePairs pairs;
-    for (unsigned int i = 0; i < minPath.size()-1; i++) {
-        auto itAux = std::find(partitionLinks.begin(),partitionLinks.end(),std::make_pair(minPath[i],minPath[i+1]));
-        if (itAux !=  partitionLinks.end()) {
-            pairs.push_back(*itAux);
-        }
-    }
-    if (!pairs.empty()) {// critical link it is necessary search the route in other form
-        if (pairs.size() == 1 && minPath.size() >2) // busco, en otro caso no hago nada
-        {
-            // busco camino parciales.
-            // descompongo las rutas.
-            NodeId rootNodeAux = rootNode;
-            NodeId target1 = pairs.front().first;
-            NodeId root1 =  pairs.front().second;
-            runDisjoint(target1);
-
-
-            Route auxPath1;
-            Route auxPath2;
-
-
-        }
-        else
-        {
-            // retornar no es posible encontrar rutas disjuntas para este camino
-        }
-    }
-
-    int test[12];
-    int test2[12];
-    for (int i = 0; i < 12; i++)
-        test[i] = test2[i] = -1;
-    if (minPath.size() > 12)
-        throw cRuntimeError("quitar test");
-    for (unsigned int i = 0; i < minPath.size(); i++)
-        test[i] = minPath[i];
-    // comprobar si la ruta usa enlaces que particionan la red.
-
-    LinkArray linkArrayMod = linkArray;
-    // creamos el nuevo mapa
-    for (unsigned int i = 0; i < minPath.size() - 1; i++) {
-        int nodoInicial = minPath[i];
-        int nodoFinal = minPath[i + 1];
-        auto it = linkArrayMod.find(nodoInicial);
-        if (it == linkArrayMod.end())
-            throw cRuntimeError("Nodo no encontrado en la matriz de conexión");
-        for (auto itAuxVec = it->second.begin(); itAuxVec != it->second.end(); ++itAuxVec) {
-            // cancelo en enlace directo y pongo al arco en direccion contraria el coste inverso del arco directo
-
-            Edge* edge = *itAuxVec;
-            if (edge->last_node() == nodoFinal) {
-                Edge* newedge = new Edge();
-                newedge->last_node() = nodoInicial;
-                newedge->cost.cost1 = -edge->cost.cost3;
-                newedge->cost.cost2 = -edge->cost.cost2;
-                newedge->cost.cost3 = -edge->cost.cost1;
-                tempEdges.push_back(newedge);
-
-                auto itAux = linkArrayMod.find(nodoFinal);
-                if (itAux == linkArrayMod.end())
-                    throw cRuntimeError("Nodo no encontrado en la matriz de conexión");
-                for (auto &elem : itAux->second) {
-                    if (elem->last_node() == nodoInicial) {
-                        elem = newedge; // arco inverso con el coste invertido
-                        break;
-                    }
-                }
-                it->second.erase(itAuxVec); // elimino el arco directo
-                break;
-            }
-        }
-    }
-
-    runUntil(target, linkArrayMod, routeMapdisj, kRoutesMap);
-
-    Route minPathD;
-
-    FuzzyCost cost2;
-    if (!getRoute(target, minPathD, routeMapdisj, cost2)) {
-        // grafo particionado, no se pueden quitar todos los enlaces.
-        throw cRuntimeError("Imposible encontrar ruta");
-    }
-    if (minPathD.size() > 12)
-        throw cRuntimeError("quitar test");
-    for (unsigned int i = 0; i < minPathD.size(); i++)
-        test2[i] = minPathD[i];
-
-    BreaksVect Vect_breaks;
-    breaks(minPath, minPathD, Vect_breaks);
-
-    while (!tempEdges.empty()) {
-        delete tempEdges.back();
-        tempEdges.pop_back();
-    }
-
-    Route gamma1;
-    Route gamma2;
-
-    if (!Vect_breaks.empty()) {
-        Pair_Paths(minPath, minPathD, Vect_breaks, linkArray, rootNode, target, gamma1, gamma2);
-    }
-    else {
-        gamma1 = minPath;
-        gamma2 = minPathD;
-    }
-    // store the routes
-    auto it = kRoutesMap.find(target);
-    if (it == kRoutesMap.end())
-    {
-        Kroutes rout;
-        rout.push_back(gamma1);
-        rout.push_back(gamma2);
-    }
-    else
-    {
-        it->second.clear();
-        it->second.push_back(gamma1);
-        it->second.push_back(gamma2);
-    }
+    runDisjoint(rootNode, target, partitionLinks, routeMap,linkArray, kRoutesMap);
 }
 
 bool DijkstraFuzzy::checkDisjoint(const NodeId &nodeId, Route & r1, Route &r2) {

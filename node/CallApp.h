@@ -19,7 +19,7 @@ using namespace omnetpp;
  * Generates traffic for the network.
  */
 
-class CallApp : public cSimpleModule
+class CallApp : public cSimpleModule, public cListener
 {
 private:
     // configuration
@@ -46,6 +46,7 @@ private:
 
     long callCounter = 0;
     long callReceived = 0;
+
     enum State
     {
         WAITCONFIRMATION = 0, ON, OFF, ACTIVE, PASSIVE //this call doesn't create flows
@@ -109,6 +110,8 @@ private:
     std::map<uint64_t, CallInfo*> activeCalls;
 
     bool check = true;
+
+    static bool residual;
 public:
     CallApp();
     virtual ~CallApp();
@@ -116,9 +119,10 @@ public:
 protected:
     virtual void readTopo();
     virtual void rescheduleEvent();
-    virtual void initialize();
-    virtual void handleMessage(cMessage *msg);
+    virtual void initialize() override;
+    virtual void handleMessage(cMessage *msg) override;
     virtual void checkAlg();
+    virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
 };
 
 #endif /* CALLAPP_H_ */

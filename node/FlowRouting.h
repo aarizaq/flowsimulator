@@ -58,6 +58,8 @@ private:
     cMessage *actualizeTimer;
     cMessage *computeBwTimer;
 
+    static simsignal_t actualizationSignal;
+
     DijkstraKshortest * dijkstra = nullptr;
 
     simtime_t lastTimeActualize;

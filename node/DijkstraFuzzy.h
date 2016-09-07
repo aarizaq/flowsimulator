@@ -43,6 +43,16 @@ protected:
     };
 
 public:
+    enum Method
+    {
+        basic, widestshortest, shortestwidest
+    };
+
+protected :
+    Method method;
+
+public:
+
     typedef std::vector<NodeId> Route;
     typedef std::map<NodeId, Route> MapRoutes;
 
@@ -50,54 +60,79 @@ public:
     {
     public:
         NodeId iD;
+        Method m;
         double cost;
+        double cost2 = -1;
         SetElem()
         {
             iD = UndefinedAddr;
             cost = 1e30;
+            cost2 = 0;
+            m = basic;
         }
         SetElem& operator=(const SetElem& val)
         {
             this->iD = val.iD;
+            this->cost2 = val.cost2;
             this->cost = val.cost;
             return *this;
         }
-
     };
+
     friend bool operator <(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y);
     friend bool operator >(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y);
     class State
     {
     public:
-        double cost;
+        double cost = 1e30;
+        double cost2 = 0;
         NodeId idPrev;
         StateLabel label;
         State();
-        State(const double &cost);
-        ~State();
-        void setCostVector(const double &cost);
+        State(const double &cost, const double &);
+        virtual ~State();
     };
 
     struct Edge
     {
         NodeId last_node_; // last node to reach node X
         double cost;
+        double cost2;
         Edge()
         {
             cost = 1e30;
+            cost2 = 0;
         }
+
+        Edge(const Edge &other)
+        {
+            last_node_ = other.last_node_;
+            cost = other.cost;
+            cost2 = other.cost2;
+        }
+
+        virtual Edge *dup() const {return new Edge(*this);}
+
         virtual ~Edge()
         {
 
         }
+
         inline NodeId& last_node()
         {
             return last_node_;
         }
+
         virtual double& Cost()
         {
             return cost;
         }
+
+        virtual double& Cost2()
+        {
+            return cost2;
+        }
+
     };
 
     typedef std::map<NodeId, Dijkstra::State> RouteMap;
@@ -126,13 +161,13 @@ public:
     virtual void setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray &, LinkArray &);*/
 
     virtual void cleanLinkArray(LinkArray &);
-    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, LinkArray &);
+    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, double cost2, LinkArray &);
     virtual void addEdge(const NodeId & dest_node, Edge*, LinkArray &);
     virtual void deleteEdge(const NodeId &, const NodeId &, LinkArray &);
     virtual Edge* removeEdge(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray);
 
     virtual void cleanLinkArray();
-    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost);
+    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, double cost2);
     virtual void addEdge(const NodeId & dest_node, Edge *);
     virtual void deleteEdge(const NodeId &, const NodeId &);
     virtual void setRoot(const NodeId & dest_node);
@@ -142,15 +177,34 @@ public:
     virtual void runUntil(const NodeId &);
     virtual bool getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode);
     virtual bool getRoute(const NodeId &, std::vector<NodeId> &, const RouteMap &);
+    virtual void setMethod(Method p) {method = p;}
 };
 
 inline bool operator <(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
 {
+    if (x.m == Dijkstra::widestshortest) {
+        if (x.cost != y.cost)
+            return x.cost < y.cost;
+        return x.cost2 > y.cost2;
+    }
+    if (x.m == Dijkstra::shortestwidest)
+        if (x.cost2 != y.cost2)
+            return x.cost2 > y.cost2;
+        return x.cost < y.cost;
     return x.cost < y.cost;
 }
 
 inline bool operator >(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
 {
+    if (x.m == Dijkstra::widestshortest) {
+        if (x.cost != y.cost)
+            return x.cost > y.cost;
+        return x.cost2 < y.cost2;
+    }
+    if (x.m == Dijkstra::shortestwidest)
+        if (x.cost2 != y.cost2)
+            return x.cost2 < y.cost2;
+        return x.cost > y.cost;
     return x.cost > y.cost;
 }
 
@@ -204,16 +258,24 @@ public:
         ~State();
         void setFuzzyCost(const FuzzyCost &cost);
     };
-    struct Edge
-    {
+    struct Edge {
         NodeId last_node_; // last node to reach node X
         FuzzyCost cost;
-        Edge()
-        {
+        Edge() {
             cost = maximumCost;
         }
-        inline NodeId& last_node()
-        {
+        Edge(const Edge &other) {
+            last_node_ = other.last_node_;
+            cost = other.cost;
+        }
+        virtual ~Edge() {
+
+        }
+
+        virtual Edge *dup() const {
+            return new Edge(*this);
+        }
+        inline NodeId& last_node() {
             return last_node_;
         }
     };
@@ -258,6 +320,7 @@ protected:
             const NodeId & t, const Route &, Route &);
 public:
     DijkstraFuzzy();
+    DijkstraFuzzy(const DijkstraFuzzy& other);
     virtual ~DijkstraFuzzy();
     virtual void setFromTopo(const cTopology *);
     virtual bool getHasFindDisjoint() const {return hasFindDisjoint;}

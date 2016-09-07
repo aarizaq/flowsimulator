@@ -15,9 +15,10 @@ package node;
 simple FlowRouting
 {
     parameters:
-        volatile double actualizeState @unit(s)= default(60s+uniform(-0.1s,0.1s));
+        volatile double actualizeState @unit(s)= default(60s);
         volatile double breakRelease  @unit(s)= default(0);
-        double minimumTimeActualize @unit(s) = default(10s); // minimum time between two actualization messages
+        bool emitSignals = default(false);
+        double minimumTimeActualize @unit(s) = default(60s); // minimum time between two actualization messages
         string flowClass = default(""); // como se comporta el router cuando está lleno el canal, como tira los datos
         bool actPercentage = default(false);
         double percentage = default(0.1);

@@ -15,6 +15,7 @@
 #include "Packet_m.h"
 
 uint64_t CallApp::callIdentifier = 1;
+bool CallApp::residual = false;
 
 Define_Module(CallApp);
 
@@ -117,7 +118,7 @@ void CallApp::readTopo()
         for (int j = 0; j < node->getNumOutLinks(); j++) {
             int addressAux = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
             dijFuzzy->addEdge(address, addressAux, 1, 2, 3);
-            dj.addEdge(address, addressAux,1);
+            dj.addEdge(address, addressAux,1,10000);
         }
     }
     NodePairs links;
@@ -202,6 +203,9 @@ void CallApp::initialize()
     RegisterMsg * msg = new RegisterMsg();
     msg->setSourceId(par("sourceId"));
     send(msg, "out");
+
+    // register in the root module to receive the actualization of all nodes.
+    cSimulation::getActiveSimulation()->getSystemModule()->subscribe("actualizationSignal",this);
 }
 
 void CallApp::checkAlg() {
@@ -214,6 +218,7 @@ void CallApp::checkAlg() {
     DijkstraFuzzy::Route r1, r2, min;
     DijkstraFuzzy::FuzzyCost cost;
     dijFuzzy->getRoute(destAddress, min, cost);
+
     if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
         // guarda minimo y disjuntas
         std::ofstream myfile;
@@ -628,3 +633,49 @@ void CallApp::handleMessage(cMessage *msg)
     rescheduleEvent();
 }
 
+void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
+{
+    Enter_Method_Silent();
+
+    Actualize *pkt = dynamic_cast<Actualize *>(obj);
+    if (pkt == nullptr || dijFuzzy == nullptr) {
+        throw cRuntimeError("Sennal no esperada");
+        return; //
+    }
+    // actualiza los estados para ejecutar disjtra.
+    int nodeId = pkt->getSrcAddr();
+    for (unsigned int i = 0; i < pkt->getLinkDataArraySize(); i++) {
+        LinkData linkData = pkt->getLinkData(i);
+        if (linkData.nominal == 0)
+            dijFuzzy->deleteEdge(nodeId,linkData.node);
+        else {
+            double minResidual = linkData.nominal-linkData.min;
+            double meanResidual = linkData.nominal-linkData.mean;
+            double maxResidual = linkData.nominal-linkData.max;
+
+            if (residual) {
+                if (minResidual < 0.0001)
+                    minResidual = 1/0.0001;
+                else
+                    minResidual = 1/minResidual;
+
+                if (meanResidual < 0.0001)
+                    meanResidual = 1/0.0001;
+                else
+                    meanResidual = 1/meanResidual;
+
+                if (maxResidual < 0.0001)
+                    maxResidual = 1/0.0001;
+                else
+                    maxResidual = 1/maxResidual;
+            }
+            else {
+                // Usar funciones lineales  o hiperbólicas?
+                minResidual /= linkData.nominal;
+                meanResidual /= linkData.nominal;
+                maxResidual /= linkData.nominal;
+            }
+            dijFuzzy->addEdge(nodeId,linkData.node,minResidual, meanResidual, maxResidual);
+        }
+    }
+}

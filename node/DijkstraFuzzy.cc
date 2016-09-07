@@ -57,6 +57,44 @@ DijkstraFuzzy::DijkstraFuzzy()
     initMinAndMax();
 }
 
+DijkstraFuzzy::DijkstraFuzzy(const DijkstraFuzzy& other)
+{
+    kRoutesMap = other.kRoutesMap;
+
+    while (!linkArray.empty()) {
+        while (!linkArray.begin()->second.empty()) {
+            delete linkArray.begin()->second.back();
+            linkArray.begin()->second.pop_back();
+        }
+        linkArray.erase(linkArray.begin());
+    }
+
+    while (!uniqueLink.empty()) {
+        while (!uniqueLink.begin()->second.empty()) {
+            delete uniqueLink.begin()->second.back();
+            uniqueLink.begin()->second.pop_back();
+        }
+        uniqueLink.erase(uniqueLink.begin());
+    }
+
+    linkArray = other.linkArray;
+    for (auto elem : linkArray) {
+        for (unsigned int i = 0; i < elem.second.size(); i++)
+            elem.second[i] = elem.second[i]->dup();
+    }
+
+    uniqueLink = other.uniqueLink;
+    for (auto elem : uniqueLink) {
+        for (unsigned int i = 0; i < elem.second.size(); i++)
+            elem.second[i] = elem.second[i]->dup();
+    }
+
+    routeMap = other.routeMap;
+    rootNode = other.rootNode;
+    K_LIMITE = other.K_LIMITE;
+    limitsData = other.limitsData;
+}
+
 void DijkstraFuzzy::cleanLinkArray()
 {
     for (LinkArray::iterator it = linkArray.begin(); it != linkArray.end(); it++)
@@ -1085,24 +1123,21 @@ void DijkstraFuzzy::discoverAllPartitionedLinks(const LinkArray & topo, NodePair
     Dijkstra dj;
     for (auto elem : topo) {
         for (auto elem2 : elem.second) {
-            dj.addEdge(elem.first,elem2->last_node(),1);
+            dj.addEdge(elem.first,elem2->last_node(),1,10000);
         }
     }
     dj.discoverAllPartitionedLinks(links);
 }
 
 
-Dijkstra::State::State()
+Dijkstra::State::State(): idPrev(UndefinedAddr), label(tent)
 {
-    idPrev = UndefinedAddr;
-    label = tent;
 }
 
-Dijkstra::State::State(const double &costData)
+Dijkstra::State::State(const double &costData, const double &c ) :Dijkstra::State::State()
 {
-    idPrev = UndefinedAddr;
-    label = tent;
     cost = costData;
+    cost2 = c;
 }
 
 Dijkstra::State::~State()
@@ -1135,7 +1170,7 @@ Dijkstra::~Dijkstra()
     cleanLinkArray();
 }
 
-void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost, LinkArray & linkArray)
+void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost, double cost2, LinkArray & linkArray)
 {
     auto it = linkArray.find(originNode);
     if (it != linkArray.end()) {
@@ -1151,6 +1186,7 @@ void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, doub
     link->last_node() = last_node;
     // Also record the link delay and quality..
     link->Cost() = cost;
+    link->Cost2() = cost2;
     linkArray[originNode].push_back(link);
 }
 
@@ -1200,9 +1236,9 @@ Dijkstra::Edge * Dijkstra::removeEdge(const NodeId & originNode, const NodeId & 
     return nullptr;
 }
 
-void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost)
+void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost,  double cost2)
 {
-    addEdge(originNode, last_node, cost, linkArray);
+    addEdge(originNode, last_node, cost, cost2, linkArray);
 }
 
 void Dijkstra::addEdge(const NodeId & originNode, Edge * edge)
@@ -1244,7 +1280,7 @@ void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArr
     if (it == linkArray.end())
         throw cRuntimeError("Node not found");
 
-    State state(0);
+    State state(0,1e300);
     state.label = perm;
     routeMap[rootNode] = state;
 
@@ -1273,9 +1309,14 @@ void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArr
         for (unsigned int i = 0; i < linkIt->second.size(); i++) {
             Edge* current_edge = (linkIt->second)[i];
             double cost;
-            double maxCost = 0;
+            double cost2;
+
             auto itNext = routeMap.find(current_edge->last_node());
             cost = current_edge->cost + it->second.cost;
+            cost2 = std::min(current_edge->cost2, it->second.cost2);
+
+            double maxCost = itNext->second.cost;
+            double maxCost2 = itNext->second.cost2;
 
             if (itNext == routeMap.end()) {
                 State state;
@@ -1290,7 +1331,22 @@ void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArr
                 heap.insert(newElem);
             }
             else {
-                if (cost < maxCost) {
+                bool actualize = false;
+
+                if (method == Method::widestshortest) {
+                    if (cost < maxCost || (cost == maxCost && cost2 > maxCost2))
+                        actualize = true;
+                }
+                else if (method == Method::shortestwidest) {
+                    if (cost2 > maxCost2 || (cost2 == maxCost2 && cost < maxCost))
+                        actualize = true;
+                }
+                else {
+                    if (cost < maxCost)
+                        actualize = true;
+                }
+
+                if (actualize) {
                     itNext->second.cost = cost;
                     itNext->second.idPrev = elem.iD;
                     SetElem newElem;
@@ -1348,7 +1404,7 @@ void Dijkstra::setFromTopo(const cTopology *topo)
             NodeId idNex = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
             cChannel * channel = node->getModule()->gate("port$o", i)->getTransmissionChannel();
             double cost = 1 / channel->getNominalDatarate();
-            addEdge(id, idNex, cost);
+            addEdge(id, idNex, cost,channel->getNominalDatarate());
         }
     }
 }

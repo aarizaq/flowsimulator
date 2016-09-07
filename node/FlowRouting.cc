@@ -17,6 +17,7 @@
 
 Define_Module(FlowRouting);
 
+simsignal_t FlowRouting::actualizationSignal = registerSignal("actualizationSignal");
 
 // TODO: Mecanismos de reserva y comparticion cuando los enlaces estan llenos, el ancho de banda se reparte y se puede cambiar el ancho de banda en funcion del reparto.
 
@@ -191,12 +192,16 @@ bool FlowRouting::actualize(Actualize *other)
         }
         pkt->setLinkData(elem.second.port, auxdata);
     }
-    for (int i = 0; i < localOutSize; i++)
-        send(pkt->dup(), "localOut", i);
-    if (other)
-        pkt->encapsulate(other);
-    for (auto elem : neighbors)
-        send(pkt->dup(), "out", elem.second.port);
+    if (par("emitSignals"))
+        emit(actualizationSignal,pkt);
+    else {
+        for (int i = 0; i < localOutSize; i++)
+            send(pkt->dup(), "localOut", i);
+        if (other)
+            pkt->encapsulate(other);
+        for (auto elem : neighbors)
+            send(pkt->dup(), "out", elem.second.port);
+    }
 
     lastTimeActualize = simTime();
     scheduleAt(simTime() + par("actualizeState"), actualizeTimer);

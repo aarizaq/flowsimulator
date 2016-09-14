@@ -126,9 +126,13 @@ void DijkstraFuzzy::addEdge(const NodeId & originNode, const NodeId & last_node,
     if (it != linkArray.end()) {
         for (unsigned int i = 0; i < it->second.size(); i++) {
             if (last_node == it->second[i]->last_node_) {
-                it->second[i]->cost.cost1 = cost;
-                it->second[i]->cost.cost2 = cost2;
-                it->second[i]->cost.cost3 = cost3;
+                if (it->second[i]->cost.cost1 != cost || it->second[i]->cost.cost2 != cost2 || it->second[i]->cost.cost3 != cost3) {
+                    it->second[i]->cost.cost1 = cost;
+                    it->second[i]->cost.cost2 = cost2;
+                    it->second[i]->cost.cost3 = cost3;
+                    kRoutesMap.clear();
+                    routeMap.clear();
+                }
                 return;
             }
         }
@@ -139,6 +143,8 @@ void DijkstraFuzzy::addEdge(const NodeId & originNode, const NodeId & last_node,
     link->cost.cost1 = cost;
     link->cost.cost2 = cost2;
     link->cost.cost3 = cost3;
+    kRoutesMap.clear();
+    routeMap.clear();
     linkArray[originNode].push_back(link);
 }
 
@@ -151,29 +157,20 @@ void DijkstraFuzzy::addEdge(const NodeId & originNode, Edge *edge)
             if (edge->last_node() == it->second[i]->last_node_) {
                 delete it->second[i];
                 it->second[i] = edge;
+                kRoutesMap.clear();
+                routeMap.clear();
                 return;
             }
         }
     }
     linkArray[originNode].push_back(edge);
-    kRoutesMap.clear();
 }
 
 void DijkstraFuzzy::deleteEdge(const NodeId & originNode, const NodeId & last_node)
 {
-    LinkArray::iterator it;
-    it = linkArray.find(originNode);
-    if (it != linkArray.end()) {
-        for (auto itAux = it->second.begin(); itAux != it->second.end(); ++itAux) {
-            Edge *edge = *itAux;
-            if (last_node == edge->last_node_) {
-                it->second.erase(itAux);
-                delete edge;
-                return;
-            }
-        }
-    }
-    kRoutesMap.clear();
+    DijkstraFuzzy::Edge *  e = removeEdge(originNode, last_node);
+    if (e)
+        delete e;
 }
 
 
@@ -186,6 +183,8 @@ DijkstraFuzzy::Edge * DijkstraFuzzy::removeEdge(const NodeId & originNode, const
             Edge *edge = *itAux;
             if (last_node == edge->last_node_) {
                 it->second.erase(itAux);
+                kRoutesMap.clear();
+                routeMap.clear();
                 return edge;
             }
         }
@@ -200,10 +199,10 @@ void DijkstraFuzzy::setRoot(const NodeId & dest_node)
 
 void DijkstraFuzzy::run()
 {
-    run(linkArray, routeMap, kRoutesMap);
+    run(linkArray, routeMap);
 }
 
-void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap, MapRoutes& kRoutesMap)
+void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
 {
     std::deque<SetElem> heap;
     routeMap.clear();
@@ -261,35 +260,6 @@ void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap, MapRout
                 throw cRuntimeError("error in data");
         }
 
-        bool routeExist = false;
-        if (!pathActive.empty()) // valid path, record in the map
-        {
-            while (!pathActive.empty()) {
-                pathNode.push_back(pathActive.back());
-                pathActive.pop_back();
-            }
-            MapRoutes::iterator itKroutes = kRoutesMap.find(elem.iD);
-            if (itKroutes == kRoutesMap.end()) {
-                Kroutes kroutes;
-                kroutes.push_back(pathNode);
-                kRoutesMap.insert(std::make_pair(elem.iD, kroutes));
-            }
-            else {
-                for (unsigned int j = 0; j < itKroutes->second.size(); j++) {
-                    if (pathNode == itKroutes->second[j]) {
-                        routeExist = true;
-                        break;
-                    }
-                }
-                if (!routeExist) {
-                    if ((int) itKroutes->second.size() < K_LIMITE)
-                        itKroutes->second.push_back(pathNode);
-                }
-            }
-        }
-
-        if (routeExist)
-            continue; // next
         // next hop
         auto linkIt = linkArray.find(elem.iD);
         if (linkIt == linkArray.end())
@@ -339,14 +309,10 @@ void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap, MapRout
     }
 }
 
-void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, RouteMap & routeMap,
-        MapRoutes& kRoutesMap)
+void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, RouteMap & routeMap)
 {
     std::deque<SetElem> heap;
     routeMap.clear();
-
-    // include routes in the map
-    kRoutesMap.clear();
 
     auto it = linkArray.find(rootNode);
     if (it == linkArray.end())
@@ -392,36 +358,6 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
                 throw cRuntimeError("error in data");
         }
 
-        bool routeExist = false;
-        if (!pathActive.empty()) // valid path, record in the map
-        {
-            while (!pathActive.empty()) {
-                pathNode.push_back(pathActive.back());
-                pathActive.pop_back();
-            }
-            MapRoutes::iterator itKroutes = kRoutesMap.find(elem.iD);
-            if (itKroutes == kRoutesMap.end()) {
-                Kroutes kroutes;
-                kroutes.push_back(pathNode);
-                kRoutesMap.insert(std::make_pair(elem.iD, kroutes));
-            }
-            else {
-                for (unsigned int j = 0; j < itKroutes->second.size(); j++) {
-                    if (pathNode == itKroutes->second[j]) {
-                        routeExist = true;
-                        break;
-                    }
-                }
-                if (!routeExist) {
-                    if ((int) itKroutes->second.size() < K_LIMITE)
-                        itKroutes->second.push_back(pathNode);
-                }
-            }
-        }
-
-        if (routeExist) // esta ruta con los mismos nodos ya se ha explorado
-            continue; // next
-
         if (target == elem.iD)
             return;
 
@@ -435,8 +371,8 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
             FuzzyCost cost;
 
             // check if the node is in the path
-            //if (std::find(pathNode.begin(),pathNode.end(),current_edge->last_node())!=pathNode.end())
-            //    continue;
+            if (std::find(pathNode.begin(),pathNode.end(),current_edge->last_node()) != pathNode.end())
+                continue;
 
             RouteMap::iterator itNext = routeMap.find(current_edge->last_node());
 
@@ -618,7 +554,7 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
         }
     }
 
-    runUntil(target, linkArrayMod, routeMapdisj, kRoutesMap);
+    runUntil(target, linkArrayMod, routeMapdisj);
 
     Route minPathD;
 
@@ -652,17 +588,23 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
         gamma1 = minPath;
         gamma2 = minPathD;
     }
+
+    FuzzyCost costG1,costG2;
+    // get the cost of the routes
+
+    getCostPath(gamma1, linkArray, costG1);
+    getCostPath(gamma2, linkArray, costG2);
+
     // store the routes
     auto it = kRoutesMap.find(target);
-    if (it == kRoutesMap.end())
-    {
+
+    if (it == kRoutesMap.end()) {
         Kroutes rout;
         rout.push_back(gamma1);
         rout.push_back(gamma2);
         kRoutesMap[target] = rout;
     }
-    else
-    {
+    else {
         it->second.clear();
         it->second.push_back(gamma1);
         it->second.push_back(gamma2);
@@ -681,6 +623,7 @@ bool DijkstraFuzzy::checkDisjoint(const NodeId &nodeId, Route & r1, Route &r2) {
 
     r1 = it->second[0];
     r2 = it->second[1];
+
     return true;
 }
 
@@ -1176,7 +1119,12 @@ void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, doub
     if (it != linkArray.end()) {
         for (unsigned int i = 0; i < it->second.size(); i++) {
             if (last_node == it->second[i]->last_node_) {
-                it->second[i]->Cost() = cost;
+                // check changes in the cost
+                if (it->second[i]->Cost() != cost) {
+                    it->second[i]->Cost() = cost;
+                    // delete routing stored information
+                    routeMap.clear();
+                }
                 return;
             }
         }
@@ -1188,6 +1136,7 @@ void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, doub
     link->Cost() = cost;
     link->Cost2() = cost2;
     linkArray[originNode].push_back(link);
+    routeMap.clear();
 }
 
 void Dijkstra::addEdge(const NodeId & originNode, Edge * edge, LinkArray & linkArray)
@@ -1207,18 +1156,9 @@ void Dijkstra::addEdge(const NodeId & originNode, Edge * edge, LinkArray & linkA
 
 void Dijkstra::deleteEdge(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray)
 {
-    auto it = linkArray.find(originNode);
-    if (it != linkArray.end()) {
-        for (auto itAux = it->second.begin(); itAux != it->second.end(); ++itAux) {
-            Edge *edge = *itAux;
-            if (last_node == edge->last_node_) {
-
-                it->second.erase(itAux);
-                delete edge;
-                return;
-            }
-        }
-    }
+    Dijkstra::Edge * e = removeEdge(originNode, last_node,linkArray);
+    if (e != nullptr)
+        delete e;
 }
 
 Dijkstra::Edge * Dijkstra::removeEdge(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray)
@@ -1229,6 +1169,7 @@ Dijkstra::Edge * Dijkstra::removeEdge(const NodeId & originNode, const NodeId & 
             Edge *edge = *itAux;
             if (last_node == edge->last_node_) {
                 it->second.erase(itAux);
+                routeMap.clear();
                 return edge;
             }
         }
@@ -1493,3 +1434,29 @@ void Dijkstra::discoverAllPartitionedLinks(const LinkArray & topo, NodePairs &li
     }
 }
 
+bool DijkstraFuzzy::getCostPath(const Route &route, const LinkArray &linkArray, FuzzyCost &cost) {
+
+    FuzzyCost costAux;
+    for (unsigned int i = 0; i < route.size() - 1; i++) {
+
+        NodeId ini = route[i];
+        NodeId end = route[i + 1];
+        auto linkIt = linkArray.find(ini);
+        if (linkIt == linkArray.end())
+            throw cRuntimeError("Error link not found in linkArray");
+        Edge* e = nullptr;
+        for (unsigned int i = 0; i < linkIt->second.size(); i++) {
+            Edge* current_edge = (linkIt->second)[i];
+            if (current_edge->last_node() == end) {
+                e = current_edge;
+                break;
+            }
+        }
+        if (e == nullptr)
+            return false;
+        costAux = costAux + e->cost;
+    }
+    cost = costAux;
+    return true;
+
+}

@@ -270,7 +270,22 @@ void CallApp::handleMessage(cMessage *msg)
             pk->setDestinationId(par("destinationId"));
 
             // TODO: Include the source routing in the packet.
+            DijkstraFuzzy::Route r1, r2, min;
+
             dijFuzzy->runDisjoint(destAddress);
+            //dijFuzzy->getRoute(destAddress, min, cost);
+            if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
+                DijkstraFuzzy::FuzzyCost costr1,costr2;
+                dijFuzzy->getCostPath(r1, costr1);
+                dijFuzzy->getCostPath(r2, costr2);
+                double total = costr1.exp() + costr2.exp();
+
+                DijkstraFuzzy::Route *r = uniform(0,total)< costr1.exp() ?&r2:&r1;
+                pk->setRouteArraySize(r->size());
+                for (unsigned int i = 0; i < r->size(); i++) {
+                    pk->setRoute(i,(*r)[i]);
+                }
+            }
 
             // TODO : recall timer,
 

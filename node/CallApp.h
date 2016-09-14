@@ -109,7 +109,7 @@ private:
     std::map<int, long double> sendBytes;
     std::map<uint64_t, CallInfo*> activeCalls;
 
-    bool check = true;
+    bool check = false;
 
     static bool residual;
 public:

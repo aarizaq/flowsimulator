@@ -21,7 +21,7 @@ simple CallApp like IApp
         int destinationId = default(0);
         volatile double callArrival @unit(s) = default(exponential(20s)); // time between generating packets
         volatile double callDuration @unit(s) = default(exponential(60s)); // time between generating packets
-        volatile double callReserve @unit(bps);  //
+        volatile double callReserve @unit(bps) = default(0bps);  //
         
         bool generateFlow = default(true); // the source can generate calls
         // paramters of flows assined to calls          

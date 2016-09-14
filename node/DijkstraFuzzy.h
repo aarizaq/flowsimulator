@@ -230,6 +230,7 @@ public:
             lhs += rhs;
             return lhs;
         }
+        const double exp() const {return ((1 - DijkstraFuzzy::alpha) * cost1 + cost2 + DijkstraFuzzy::alpha * cost3);}
     };
     class SetElem
     {
@@ -293,6 +294,7 @@ protected:
     static FuzzyCost maximumCost;
     friend bool operator <(const DijkstraFuzzy::FuzzyCost&, const DijkstraFuzzy::FuzzyCost&);
     friend bool operator ==(const DijkstraFuzzy::FuzzyCost&, const DijkstraFuzzy::FuzzyCost&);
+    friend bool operator !=(const DijkstraFuzzy::FuzzyCost&, const DijkstraFuzzy::FuzzyCost&);
     friend bool operator >(const DijkstraFuzzy::FuzzyCost&, const DijkstraFuzzy::FuzzyCost&);
     friend bool operator <(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y);
     friend bool operator ==(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y);
@@ -334,14 +336,16 @@ public:
     virtual Edge * removeEdge(const NodeId & originNode, const NodeId & last_node);
     virtual void setRoot(const NodeId & dest_node);
     virtual void run();
-    virtual void run(const LinkArray &linkArray, RouteMap&, MapRoutes&);
-    virtual void runUntil(const NodeId &, const LinkArray &linkArray, RouteMap&, MapRoutes&);
+    virtual void run(const LinkArray &linkArray, RouteMap&);
+    virtual void runUntil(const NodeId &, const LinkArray &linkArray, RouteMap&);
     virtual void runDisjoint(const NodeId & rootNode, const NodeId &target, NodePairs &partitionLinks, RouteMap &routeMap,const LinkArray &linkArray, MapRoutes &kRoutesMap);
     virtual void runDisjoint(const NodeId &target);
     virtual int getNumRoutes(const NodeId &nodeId);
     virtual bool getRoute(const NodeId &nodeId, std::vector<NodeId> &, FuzzyCost &);
     virtual bool getRoute(const NodeId &, std::vector<NodeId> &, const RouteMap &, FuzzyCost &);
     virtual bool checkDisjoint(const NodeId &nodeId, Route & r1, Route &r2);
+    virtual bool getCostPath(const Route &, const LinkArray &linkArray, FuzzyCost &);
+    virtual bool getCostPath(const Route &r, FuzzyCost &c) {return getCostPath(r, linkArray, c);}
 
     virtual void discoverAllPartitionedLinks(const LinkArray & topo, NodePairs &links);
     virtual void discoverAllPartitionedLinks(NodePairs &links) {
@@ -374,10 +378,7 @@ inline bool operator >(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::Set
 
 inline bool operator <(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::FuzzyCost& y)
 {
-    double exp_x = (1 - DijkstraFuzzy::alpha) * x.cost1 + x.cost2 + DijkstraFuzzy::alpha * x.cost3;
-    double exp_y = (1 - DijkstraFuzzy::alpha) * y.cost1 + y.cost2 + DijkstraFuzzy::alpha * y.cost3;
-
-    if (exp_x < exp_y) {
+    if (x.exp() < y.exp()) {
         return true;
     }
     return false;
@@ -385,21 +386,22 @@ inline bool operator <(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::F
 
 inline bool operator ==(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::FuzzyCost& y)
 {
-    double exp_x = (1 - DijkstraFuzzy::alpha) * x.cost1 + x.cost2 + DijkstraFuzzy::alpha * x.cost3;
-    double exp_y = (1 - DijkstraFuzzy::alpha) * y.cost1 + y.cost2 + DijkstraFuzzy::alpha * y.cost3;
-
-    if (exp_x == exp_y) {
+    if (x.exp() == y.exp()) {
         return true;
     }
     return false;
 }
 
+inline bool operator !=(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::FuzzyCost& y)
+{
+    if (x==y)
+        return false;
+    return true;
+}
+
 inline bool operator >(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::FuzzyCost& y)
 {
-    double exp_x = (1 - DijkstraFuzzy::alpha) * x.cost1 + x.cost2 + DijkstraFuzzy::alpha * x.cost3;
-    double exp_y = (1 - DijkstraFuzzy::alpha) * y.cost1 + y.cost2 + DijkstraFuzzy::alpha * y.cost3;
-
-    if (exp_x > exp_y) {
+    if (x.exp() > y.exp()) {
         return true;
     }
     return false;

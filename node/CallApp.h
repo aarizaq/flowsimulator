@@ -21,6 +21,13 @@ using namespace omnetpp;
 
 class CallApp : public cSimpleModule, public cListener
 {
+protected:
+    enum RoutingType {
+        HOPBYHOP,
+        SOURCEROUTING,
+        DISJOINT
+     };
+    RoutingType rType;
 private:
     // configuration
     int myAddress;
@@ -117,12 +124,15 @@ public:
     virtual ~CallApp();
 
 protected:
+    virtual void checkAlg();
     virtual void readTopo();
     virtual void rescheduleEvent();
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
-    virtual void checkAlg();
+    virtual void finish() override;
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
+
+
 };
 
 #endif /* CALLAPP_H_ */

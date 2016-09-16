@@ -39,6 +39,39 @@ CallApp::~CallApp()
     CallEvents.clear();
 }
 
+void CallApp::checkAlg() {
+    callCounter++;
+    int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
+
+    // TODO: Include the source routing in the packet.
+    dijFuzzy->runDisjoint(destAddress);
+
+    DijkstraFuzzy::Route r1, r2, min;
+    DijkstraFuzzy::FuzzyCost cost;
+    dijFuzzy->getRoute(destAddress, min, cost);
+
+    if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
+        // guarda minimo y disjuntas
+        std::ofstream myfile;
+        myfile.open("rutas.txt", std::ios::out | std::ios::app);
+        myfile << "min :";
+        for (auto elem : min)
+            myfile << elem << "-";
+        myfile << "\n";
+        myfile << "dis1 :";
+        for (auto elem : r1)
+            myfile << elem << "-";
+        myfile << "\n";
+        myfile << "dis2 :";
+        for (auto elem : r2)
+            myfile << elem << "-";
+        myfile << "\n";
+    }
+    if (!destAddresses.empty())
+        scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
+}
+
+
 void CallApp::readTopo()
 {
     if (dijFuzzy == nullptr) {
@@ -196,7 +229,12 @@ void CallApp::initialize()
         nextFlow = new cMessage();
         scheduleAt(flowArrival->doubleValue(), nextFlow);
     }
-
+    if (strcmp(par("RoutingType").stringValue(),"HopByHop") ==0)
+        rType = HOPBYHOP;
+    else if (strcmp(par("RoutingType").stringValue(),"SourceRouting") ==0)
+        rType = SOURCEROUTING;
+    else if (strcmp(par("RoutingType").stringValue(),"Disjoint") ==0)
+        rType = DISJOINT;
 
     nextEvent = new cMessage("NewEvent");
     readTopo();
@@ -206,38 +244,6 @@ void CallApp::initialize()
 
     // register in the root module to receive the actualization of all nodes.
     cSimulation::getActiveSimulation()->getSystemModule()->subscribe("actualizationSignal",this);
-}
-
-void CallApp::checkAlg() {
-    callCounter++;
-    int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
-
-    // TODO: Include the source routing in the packet.
-    dijFuzzy->runDisjoint(destAddress);
-
-    DijkstraFuzzy::Route r1, r2, min;
-    DijkstraFuzzy::FuzzyCost cost;
-    dijFuzzy->getRoute(destAddress, min, cost);
-
-    if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
-        // guarda minimo y disjuntas
-        std::ofstream myfile;
-        myfile.open("rutas.txt", std::ios::out | std::ios::app);
-        myfile << "min :";
-        for (auto elem : min)
-            myfile << elem << "-";
-        myfile << "\n";
-        myfile << "dis1 :";
-        for (auto elem : r1)
-            myfile << elem << "-";
-        myfile << "\n";
-        myfile << "dis2 :";
-        for (auto elem : r2)
-            myfile << elem << "-";
-        myfile << "\n";
-    }
-    if (!destAddresses.empty())
-        scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
 }
 
 void CallApp::handleMessage(cMessage *msg)
@@ -269,31 +275,43 @@ void CallApp::handleMessage(cMessage *msg)
             pk->setSourceId(par("sourceId"));
             pk->setDestinationId(par("destinationId"));
 
-            // TODO: Include the source routing in the packet.
-            DijkstraFuzzy::Route r1, r2, min;
 
-            dijFuzzy->runDisjoint(destAddress);
-            //dijFuzzy->getRoute(destAddress, min, cost);
-            if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
-                DijkstraFuzzy::FuzzyCost costr1,costr2;
-                dijFuzzy->getCostPath(r1, costr1);
-                dijFuzzy->getCostPath(r2, costr2);
-                double total = costr1.exp() + costr2.exp();
+            if (rType == DISJOINT) {
+                DijkstraFuzzy::Route r1, r2, min;
+                dijFuzzy->runDisjoint(destAddress);
+                //dijFuzzy->getRoute(destAddress, min, cost);
+                if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
+                    DijkstraFuzzy::FuzzyCost costr1, costr2;
+                    dijFuzzy->getCostPath(r1, costr1);
+                    dijFuzzy->getCostPath(r2, costr2);
+                    double total = costr1.exp() + costr2.exp();
 
-                DijkstraFuzzy::Route *r = uniform(0,total)< costr1.exp() ?&r2:&r1;
-                pk->setRouteArraySize(r->size());
-                for (unsigned int i = 0; i < r->size(); i++) {
-                    pk->setRoute(i,(*r)[i]);
+                    DijkstraFuzzy::Route *r =
+                            uniform(0, total) < costr1.exp() ? &r2 : &r1;
+                    pk->setRouteArraySize(r->size());
+                    for (unsigned int i = 0; i < r->size(); i++) {
+                        pk->setRoute(i, (*r)[i]);
+                    }
+                }
+            }
+            else if (rType == SOURCEROUTING) {
+                DijkstraFuzzy::Route  min;
+                DijkstraFuzzy::FuzzyCost cost;
+                dijFuzzy->getRoute(destAddress, min, cost);
+                //dijFuzzy->getRoute(destAddress, min, cost);
+                if (dijFuzzy->getRoute(destAddress, min, cost)) {
+                    pk->setRouteArraySize(min.size());
+                    for (unsigned int i = 0; i < min.size(); i++) {
+                        pk->setRoute(i, min[i]);
+                    }
                 }
             }
 
             // TODO : recall timer,
-
             send(pk, "out");
 
             if (!destAddresses.empty())
-                scheduleAt(simTime() + callArrival->doubleValue(),
-                        generateCall);
+                scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
             if (hasGUI())
                 getParentModule()->bubble("Generating call..");
         }
@@ -337,7 +355,7 @@ void CallApp::handleMessage(cMessage *msg)
                 CallEvents.erase(it);
 
                 Packet *pkFlow = new Packet();
-                pkFlow->setReserve(callInfo->usedBandwith);
+
                 pkFlow->setDestAddr(callInfo->dest);
                 pkFlow->setCallId(callInfo->callId);
                 pkFlow->setSourceId(par("sourceId"));
@@ -346,14 +364,15 @@ void CallApp::handleMessage(cMessage *msg)
 
                 if (callInfo->flowData.empty()) {
                     if (callInfo->state == ON) {
-                        callInfo->acumulateSend += (callInfo->usedBandwith
-                                * callInfo->startOn.dbl());
-
-
+                        double bsend = callInfo->usedBandwith * callInfo->startOn.dbl();
+                        callInfo->acumulateSend += (bsend);
+                        EV << "Call Id :" << callInfo->callId << "Flow Id :" << callInfo->flowId <<
+                                " Time in on :" << callInfo->startOn << "Bsend :" << bsend;
                         callInfo->state = OFF;
                         pkFlow->setType(ENDFLOW);
                         pkFlow->setFlowId(callInfo->flowId);
                         delayAux = TimeOff->doubleValue();
+                        pkFlow->setReserve(callInfo->usedBandwith);
 
                         sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
                                                         myAddress, pkFlow->getDestAddr(),
@@ -362,17 +381,16 @@ void CallApp::handleMessage(cMessage *msg)
 
                     }
                     else if (callInfo->state == OFF) {
-
                         callInfo->state = ON;
                         callInfo->flowId++;
                         pkFlow->setFlowId(callInfo->flowId);
-                        callInfo->usedBandwith =
-                                (uint64_t) usedBandwith->doubleValue();
+                        callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
+                        pkFlow->setReserve(callInfo->usedBandwith);
                         pkFlow->setType(STARTFLOW);
                         delayAux = TimeOn->doubleValue();
                         callInfo->startOn = delayAux;
 
-                        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                        sprintf(pkname, "FlowOn-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
                                 myAddress, pkFlow->getDestAddr(),
                                 pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
                         pkFlow->setName(pkname);
@@ -386,11 +404,11 @@ void CallApp::handleMessage(cMessage *msg)
                         if (elem.nextEvent > simTime())
                             continue;
                         if (elem.state == ON) {
-                            callInfo->acumulateSend += (elem.usedBandwith
-                                    * elem.startOn.dbl());
+                            callInfo->acumulateSend += (elem.usedBandwith * elem.startOn.dbl());
                             pkFlow->setFlowId(elem.flowId);
                             elem.state = OFF;
                             pkFlow->setType(ENDFLOW);
+                            pkFlow->setReserve(elem.usedBandwith);
                             delayAux = TimeOff->doubleValue();
                             sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
                                     myAddress, pkFlow->getDestAddr(),
@@ -403,8 +421,8 @@ void CallApp::handleMessage(cMessage *msg)
                             callInfo->flowId++;
                             elem.flowId = callInfo->flowId;
                             pkFlow->setFlowId(callInfo->flowId);
-                            elem.usedBandwith =
-                                    (uint64_t) usedBandwith->doubleValue();
+                            elem.usedBandwith = (uint64_t) usedBandwith->doubleValue();
+                            pkFlow->setReserve(elem.usedBandwith );
                             pkFlow->setType(STARTFLOW);
                             delayAux = TimeOn->doubleValue();
                             callInfo->startOn = delayAux;
@@ -553,8 +571,8 @@ void CallApp::handleMessage(cMessage *msg)
             pkFlow->setType(STARTFLOW);
             pkFlow->setReserve(callInfo->usedBandwith);
             pkFlow->setFlowId(callInfo->flowId);
-            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(), pkFlow->getCallId(),
-                    this->getIndex());
+            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d-FlowId-%d", myAddress, pkFlow->getDestAddr(), pkFlow->getCallId(),
+                    this->getIndex(),callInfo->flowId);
             pkFlow->setName(pkname);
             CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
             send(pkFlow, "out");
@@ -622,7 +640,13 @@ void CallApp::handleMessage(cMessage *msg)
             if (flowId.callId() > 0) {
                 auto itAux = activeCalls.find(flowId.callId());
                 CallInfo * callInfo = itAux->second;
-                callInfo->acumulateRec += (callInfo->recBandwith * SIMTIME_DBL(simTime() - callInfo->startOnRec));
+
+                double brec = callInfo->recBandwith * SIMTIME_DBL(simTime() - callInfo->startOnRec);
+                callInfo->acumulateRec += (brec);
+
+                EV << "Rec Call Id :" << callInfo->callId << "Flow Id :" << callInfo->flowId <<
+                        " Time in on :" << (simTime() - callInfo->startOnRec) << "Brec :" << brec;
+
             }
         }
         else if (pk->getType() == STARTFLOW) {
@@ -646,6 +670,22 @@ void CallApp::handleMessage(cMessage *msg)
         delete msg;
     }
     rescheduleEvent();
+}
+
+void CallApp::finish()
+{
+    long double totalSend = 0;
+    long double totalRec = 0;
+    for (auto elem : receivedBytes)
+        totalRec += elem.second;
+    for (auto elem : sendBytes)
+        totalSend += elem.second;
+    for (auto elem : activeCalls) {
+        totalRec += elem.second->acumulateRec;
+        totalSend += elem.second->acumulateSend;
+    }
+    recordScalar("Total Send",totalSend);
+    recordScalar("Total Rec",totalRec);
 }
 
 void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)

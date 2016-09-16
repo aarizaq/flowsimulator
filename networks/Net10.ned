@@ -21,7 +21,7 @@ network Net10
         channel C extends DatarateChannel
         {
             delay = default(uniform(0.1ms, 1ms));
-            datarate = default(1Mbps);
+            datarate = default(100000Mbps);
         }
     submodules:
         rte[10]: Node {

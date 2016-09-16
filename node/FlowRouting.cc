@@ -896,7 +896,7 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
                 throw cRuntimeError("Error in route, next node is not found");
             // find port to neighbor
             auto itNeig = neighbors.find(next);
-            if (itNeig != neighbors.end())
+            if (itNeig == neighbors.end())
                 throw cRuntimeError("Neighbor node not found");
             port1 = itNeig->second.port;
             // check neighbor port status
@@ -1645,6 +1645,9 @@ bool FlowRouting::procEndFlow(Packet *pk)
                     break;
                 }
             }
+            if (pk->getDestAddr() == myAddress) // send
+                return true;
+
             delete pk;
             return false;
             // throw cRuntimeError("Error Flow id not found reserved");
@@ -1672,7 +1675,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
         if (itFlowInput == inputFlows.end()) {
             if (itFlowOutput != outputFlows.end())
                 throw cRuntimeError("In outputFlows but not in inputFlows");
-            else {
+            else if (pk->getDestAddr() != myAddress) {
                 delete pk;
                 return false;
             }

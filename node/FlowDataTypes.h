@@ -38,11 +38,22 @@ struct NeighborsPorts // allows identify the port using the address.
 // Information flow
 class FlowIdentification
 {
-    int _src;
-    uint64_t _flowId;
-    uint64_t _callId;
+    int _src = -1;
+    uint64_t _flowId = 0;
+    uint64_t _callId = 0;
     int _srcId = 0;
 public:
+    FlowIdentification(){}
+
+    FlowIdentification(int s, const uint64_t &f, const uint64_t &c, int i)
+    {
+        _src = s;
+        _flowId = f;
+        _callId = c;
+        _srcId = i;
+    }
+
+
     int & srcId()
     {
         return _srcId;

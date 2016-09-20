@@ -1208,11 +1208,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
     else {
         if (pk->getType() == ENDFLOW || pk->getType() == FLOWCHANGE || pk->getType() == CROUTEFLOWEND) {
             // check if exist the for in other case
-            FlowIdentification flowId;
-            flowId.flowId() = pk->getFlowId();
-            flowId.src() = pk->getSrcAddr();
-            flowId.callId() = pk->getCallId();
-            flowId.srcId() = pk->getSourceId();
+            FlowIdentification flowId(pk->getSrcAddr(),pk->getFlowId(),pk->getCallId(),pk->getSourceId());
             auto itFlow = inputFlows.find(flowId);
             if (itFlow == inputFlows.end()) {
                 delete pk;
@@ -1236,13 +1232,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
         }
     }
 
-
-    FlowIdentification flowId;
-
-    flowId.flowId() = pk->getFlowId();
-    flowId.src() = pk->getSrcAddr();
-    flowId.callId() = pk->getCallId();
-    flowId.srcId() = pk->getSourceId();
+    FlowIdentification flowId(pk->getSrcAddr(),pk->getFlowId(),pk->getCallId(),pk->getSourceId());
 
     FlowInfo flowInfo;
     flowInfo.identify = flowId;
@@ -1485,11 +1475,8 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
         }
     }
 
-    FlowIdentification flowId;
-    flowId.flowId() = pk->getFlowId();
-    flowId.src() = pk->getSrcAddr();
-    flowId.callId() = pk->getCallId();
-    flowId.srcId() = pk->getSourceId();
+
+    FlowIdentification flowId(pk->getSrcAddr(),pk->getFlowId(),pk->getCallId(),pk->getSourceId());
 
     FlowInfo flowInfo;
     flowInfo.identify = flowId;
@@ -1619,11 +1606,13 @@ bool FlowRouting::procEndFlow(Packet *pk)
 {
     bool isCallOriented = (pk->getCallId() > 0);
 
+    FlowIdentification flowId(pk->getSrcAddr(),pk->getFlowId(),pk->getCallId(),pk->getSourceId());
+
     if (isCallOriented) {
         auto itCallInfo = callInfomap.find(pk->getCallId());
 
         for (auto it = itCallInfo->second.inputFlows.begin(); it != itCallInfo->second.inputFlows.end(); ++it) {
-            if (it->identify.flowId() == pk->getFlowId()) {
+            if (it->identify == flowId) {
                 itCallInfo->second.inputFlows.erase(it);
                 break;
             }
@@ -1632,7 +1621,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
         auto it = itCallInfo->second.outputFlows.begin();
 
         while (it != itCallInfo->second.outputFlows.end()) {
-            if (it->identify.flowId() == pk->getFlowId())
+            if (it->identify == flowId)
                 break;
             ++it;
         }
@@ -1640,7 +1629,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
         if (it == itCallInfo->second.outputFlows.end()) {
             // It has been impossible to send the start flow message to the next hop,  delete and return.
             for (auto it = pendingFlows.begin(); it != pendingFlows.end(); ++it) {
-                if (it->identify.flowId() == pk->getFlowId() && it->identify.callId() == itCallInfo->first) {
+                if (it->identify == flowId) {
                     pendingFlows.erase(it);
                     break;
                 }
@@ -1663,11 +1652,6 @@ bool FlowRouting::procEndFlow(Packet *pk)
     }
     else
     {
-        FlowIdentification flowId;
-        flowId.callId() =  pk->getCallId();
-        flowId.flowId() =  pk->getFlowId();
-        flowId.src() = pk->getSrcAddr();
-        flowId.srcId() = pk->getSourceId();
 
         auto itFlowInput = inputFlows.find(flowId);
         auto itFlowOutput = outputFlows.find(flowId);

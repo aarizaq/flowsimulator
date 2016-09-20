@@ -66,6 +66,7 @@ private:
         uint64_t reservedBandwith = 0;
         uint64_t recBandwith = 0;
         State state = OFF;
+        State stateRec = OFF;
         simtime_t nextEvent;
         simtime_t startOn;
         simtime_t startOnRec;
@@ -86,6 +87,7 @@ private:
         uint64_t callId;
         uint64_t flowId = 0;
         State state = WAITCONFIRMATION;
+        State stateRec = OFF;
         uint64_t usedBandwith = 0;
         uint64_t reservedBandwith = 0;
         uint64_t recBandwith = 0;
@@ -119,14 +121,20 @@ private:
     bool check = false;
 
     static bool residual;
+private:
+    bool trace = false;
+    void bytesTraceSend(const CallInfo *callInfo);
+    void bytesTraceRec(const CallInfo *callInfo);
 public:
     CallApp();
     virtual ~CallApp();
 
 protected:
+    using cIListener::finish;
     virtual void checkAlg();
     virtual void readTopo();
     virtual void rescheduleEvent();
+    virtual void procNextEvent();
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;

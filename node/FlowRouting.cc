@@ -21,6 +21,17 @@ simsignal_t FlowRouting::actualizationSignal = registerSignal("actualizationSign
 
 // TODO: Mecanismos de reserva y comparticion cuando los enlaces estan llenos, el ancho de banda se reparte y se puede cambiar el ancho de banda en funcion del reparto.
 
+void FlowRouting::recordOccupation(PortData &port, const ChangeBw &val)
+{
+    if (port.accmin > val.value)
+        port.accmin = val.value;
+    if (port.accmax < val.value)
+        port.accmax = val.value;
+    port.accmean +=  port.lastC.value * SIMTIME_DBL(simTime() - port.lastC.instant);
+    port.lastC = val;
+}
+
+
 FlowRouting::~FlowRouting()
 {
     cancelAndDelete(actualizeTimer);
@@ -29,15 +40,30 @@ FlowRouting::~FlowRouting()
 }
 void FlowRouting::computeUsedBw()
 {
-    simtime_t beginInteval = simTime() - computationInterval;
+    simtime_t interval = simTime() - computationInterval;
+    if (interval == simtime_t::ZERO) {
+
+        for (auto &elem : portDataArray) {
+            elem.mean = 0;
+            elem.min = 0;
+            elem.max = 0;
+            elem.accmax = 0;
+            elem.accmin = 1e300;
+            elem.accmean = 0;
+            elem.lastC.instant = simTime();
+        }
+        return;
+    }
+
     for (auto &elem : portDataArray) {
-        simtime_t previous = beginInteval;
+        simtime_t previous = computationInterval;
+#if 0
         double total = 0;
         double min = elem.nominalbw;
         double max = 0;
         if (elem.changeRegister.size() == 1) {
             simtime_t time = simTime() - elem.changeRegister.front().instant;
-            double valP = elem.changeRegister.front().value * (time.dbl()/computationInterval.dbl());
+            double valP = elem.changeRegister.front().value * (time.dbl()/interval.dbl());
             if (max < elem.changeRegister.front().value)
                 max = elem.changeRegister.front().value;
             if (min > elem.changeRegister.front().value)
@@ -45,15 +71,22 @@ void FlowRouting::computeUsedBw()
             total += valP;
         }
         else {
-            for (unsigned int i = 0; i < elem.changeRegister.size() - 1; i++) {
-                simtime_t time = elem.changeRegister[i].instant - elem.changeRegister[i + 1].instant;
-                uint64_t val = elem.changeRegister[i].value;
-                double valP = val * (time.dbl()/computationInterval.dbl());
-                total += valP;
-                if (max < elem.changeRegister[i].value)
-                    max = elem.changeRegister[i].value;
-                if (min > elem.changeRegister[i].value)
-                    min = elem.changeRegister[i].value;
+            if (!elem.changeRegister.empty()) {
+                for (unsigned int i = 0; i < elem.changeRegister.size(); i++) {
+                    simtime_t time;
+                    if (i != elem.changeRegister.size()-1)
+                        time = elem.changeRegister[i + 1].instant - elem.changeRegister[i].instant;
+                    else
+                        time = simTime() - elem.changeRegister[i].instant;
+
+                    uint64_t val = elem.changeRegister[i].value;
+                    double valP = val * (time.dbl() / interval.dbl());
+                    total += valP;
+                    if (max < elem.changeRegister[i].value)
+                        max = elem.changeRegister[i].value;
+                    if (min > elem.changeRegister[i].value)
+                        min = elem.changeRegister[i].value;
+                }
             }
         }
 
@@ -66,8 +99,22 @@ void FlowRouting::computeUsedBw()
         elem.mean = total;
         elem.min = min;
         elem.max = max;
+#endif
+        elem.accmean +=  elem.lastC.value * SIMTIME_DBL((simTime() - elem.lastC.instant));
+        elem.mean = elem.accmean/interval.dbl();
+        if (elem.lastC.value < elem.accmin)
+            elem.accmin = elem.lastC.value;
+        if (elem.lastC.value > elem.accmax)
+            elem.accmax = elem.lastC.value;
+        elem.min = elem.accmin;
+        elem.max = elem.accmax;
+        elem.accmean = 0;
+        elem.accmax = 0;
+        elem.accmin = 1e300;
+        elem.lastC.instant = simTime();
     }
-    scheduleAt(simTime()+computationInterval,computeBwTimer);
+    computationInterval = simTime();
+    // scheduleAt(simTime()+computationInterval,computeBwTimer);
 }
 
 void FlowRouting::initialize()
@@ -132,7 +179,7 @@ void FlowRouting::initialize()
         ChangeBw val;
         val.instant = simTime();
         val.value = portDataArray[i].flowOcupation;
-        portDataArray[i].changeRegister.push_back(val);
+        recordOccupation(portDataArray[i], val);
     }
     actualizePercentaje();
     delete topo;
@@ -143,9 +190,10 @@ void FlowRouting::initialize()
         flowDist = check_and_cast<BaseFlowDistribution*>(createOne(flowClass));
 
     actualizeTimer = new cMessage("actualize timer");
-    computeBwTimer = new cMessage("actualize bw timer");
-    scheduleAt(simTime()+computationInterval,computeBwTimer);
-    //scheduleAt(simTime(), actualizeTimer);
+    //computeBwTimer = new cMessage("actualize bw timer");
+    //scheduleAt(simTime()+computationInterval,computeBwTimer);
+    computationInterval = simTime();
+    scheduleAt(simTime(), actualizeTimer);
 }
 
 bool FlowRouting::actualize(Actualize *other)
@@ -164,7 +212,8 @@ bool FlowRouting::actualize(Actualize *other)
     sprintf(pkname, "Actualize-%d", myAddress);
     Actualize *pkt = new Actualize(pkname);
 
-    pkt->setSourceId(myAddress);
+    pkt->setSrcAddr(myAddress);
+    pkt->setSourceId(-1);
     pkt->setDestAddr(-1);
     pkt->setType(ACTUALIZE);
     pkt->setLinkDataArraySize(neighbors.size());
@@ -192,7 +241,7 @@ bool FlowRouting::actualize(Actualize *other)
         }
         pkt->setLinkData(elem.second.port, auxdata);
     }
-    if (par("emitSignals"))
+    if (par("actualizeWithSignals"))
         emit(actualizationSignal,pkt);
     else {
         for (int i = 0; i < localOutSize; i++)
@@ -417,7 +466,7 @@ bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
         ChangeBw val;
         val.instant = simTime();
         val.value = portDataArray[itF->second.port].flowOcupation;
-        portDataArray[itF->second.port].changeRegister.push_back(val);
+        recordOccupation(portDataArray[itF->second.port], val);
     }
     flow.port = portForward;
 
@@ -636,7 +685,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                         ChangeBw val;
                         val.instant = simTime();
                         val.value = portDataArray[i].flowOcupation;
-                        portDataArray[i].changeRegister.push_back(val);
+                        recordOccupation(portDataArray[i], val);
                         actualizePercentaje();
                     }
                 }
@@ -673,7 +722,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                                 ChangeBw val;
                                 val.instant = simTime();
                                 val.value = portDataArray[flowinfo.port].flowOcupation;
-                                portDataArray[flowinfo.port].changeRegister.push_back(val);
+                                recordOccupation(portDataArray[flowinfo.port], val);
                                 // Send end flow
                                 Packet *pkt = new Packet();
                                 pkt->setType(ENDFLOW);
@@ -1067,7 +1116,7 @@ void FlowRouting::checkPendingList()
                 ChangeBw val;
                 val.instant = simTime();
                 val.value = portDataArray[it->port].flowOcupation;
-                portDataArray[it->port].changeRegister.push_back(val);
+                recordOccupation(portDataArray[it->port], val);
                 Packet *pkStartFlow = new Packet();
 
                 if (it->identify.callId() > 0) {
@@ -1281,7 +1330,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
                     ChangeBw val;
                     val.instant = simTime();
                     val.value = portDataArray[itFlow->second.port].flowOcupation;
-                    portDataArray[itFlow->second.port].changeRegister.push_back(val);
+                    recordOccupation(portDataArray[itFlow->second.port], val);
                 }
             }
         }
@@ -1327,7 +1376,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
             ChangeBw val;
             val.instant = simTime();
             val.value = portDataArray[portForward].flowOcupation;
-            portDataArray[portForward].changeRegister.push_back(val);
+            recordOccupation(portDataArray[portForward], val);
 
             if (itCallInfo != callInfomap.end())
                 itCallInfo->second.outputFlows.push_back(flowInfo);
@@ -1421,8 +1470,8 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
                 ChangeBw val;
                 val.instant = simTime();
                 val.value = portDataArray[portForward].flowOcupation;
-                portDataArray[portForward].changeRegister.push_back(val);
 
+                recordOccupation(portDataArray[portForward], val);
                 // enviar mensajes de actualización del flujo.
                 for (auto itAux = listFlowsToModify.begin(); itAux != listFlowsToModify.end(); ++itAux) {
                     //
@@ -1554,7 +1603,7 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
             ChangeBw val;
             val.instant = simTime();
             val.value = portDataArray[portForward].flowOcupation;
-            portDataArray[portForward].changeRegister.push_back(val);
+            recordOccupation(portDataArray[portForward], val);
         }
 
         // limits for not oriented flows
@@ -1579,7 +1628,8 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
             ChangeBw val;
             val.instant = simTime();
             val.value = portDataArray[portForward].flowOcupation;
-            portDataArray[portForward].changeRegister.push_back(val);
+
+            recordOccupation(portDataArray[portForward], val);
             if (flowInfoOutputPtr != nullptr)
             {
                 flowInfoOutputPtr->used = pk->getReserve();
@@ -1646,7 +1696,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
             ChangeBw val;
             val.instant = simTime();
             val.value = portDataArray[it->port].flowOcupation;
-            portDataArray[it->port].changeRegister.push_back(val);
+            recordOccupation(portDataArray[it->port], val);
         }
         itCallInfo->second.outputFlows.erase(it);
     }
@@ -1671,7 +1721,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
             ChangeBw val;
             val.instant = simTime();
             val.value = portDataArray[itFlowOutput->second.port].flowOcupation;
-            portDataArray[itFlowOutput->second.port].changeRegister.push_back(val);
+            recordOccupation(portDataArray[itFlowOutput->second.port], val);
             outputFlows.erase(itFlowOutput);
         }
     }
@@ -1718,12 +1768,15 @@ void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId,
 void FlowRouting::handleMessage(cMessage *msg)
 {
 
+
+    //if (computeBwTimer == msg) {
+    //    computeUsedBw();
+    //    return;
+    //}
+
     if (actualizeTimer == msg) {
-        actualize();
-        return;
-    }
-    if (computeBwTimer == msg) {
         computeUsedBw();
+        actualize();
         return;
     }
 
@@ -1844,7 +1897,7 @@ void FlowRouting::handleMessage(cMessage *msg)
                 ChangeBw val;
                 val.instant = simTime();
                 val.value = portDataArray[elem.port].flowOcupation;
-                portDataArray[elem.port].changeRegister.push_back(val);
+                recordOccupation(portDataArray[elem.port], val);
             }
             if (!pendingFlows.empty()) {
                 for (auto it = pendingFlows.begin(); it != pendingFlows.end();) {

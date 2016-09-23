@@ -12,10 +12,11 @@
 #include <iostream>
 #include <fstream>
 #include "CallApp.h"
-#include "Packet_m.h"
+
 
 uint64_t CallApp::callIdentifier = 1;
 bool CallApp::residual = false;
+simsignal_t CallApp::actualizationSignal = registerSignal("actualizationSignal");
 
 Define_Module(CallApp);
 
@@ -248,7 +249,7 @@ void CallApp::procNextEvent()
             if (callInfo->state == ON) {
                 bytesTraceSend(callInfo);
                 double bsend = callInfo->usedBandwith * SIMTIME_DBL(simTime() - callInfo->startOn);
-                callInfo->acumulateSend += (bsend);
+                callInfo->acumulateSend += (bsend/1000.0);
                 EV << "Call Id :" << callInfo->callId << "Flow Id :" << callInfo->flowId <<
                         " Time in on :" << callInfo->startOn << "Bsend :" << bsend;
                 callInfo->state = OFF;
@@ -289,7 +290,7 @@ void CallApp::procNextEvent()
                     continue;
                 if (elem.state == ON) {
                     bytesTraceRec(callInfo);
-                    callInfo->acumulateSend += (elem.usedBandwith * SIMTIME_DBL(simTime() - elem.startOn));
+                    callInfo->acumulateSend += ((elem.usedBandwith * SIMTIME_DBL(simTime() - elem.startOn))/1000.0);
                     pkFlow->setFlowId(elem.flowId);
                     elem.state = OFF;
                     pkFlow->setType(ENDFLOW);
@@ -345,10 +346,366 @@ void CallApp::procNextEvent()
                 myAddress, pkFlow->getDestAddr(),
                 pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
         pkFlow->setName(pkname);
-
         send(pkFlow, "out");
+        double bsend = flowEvent->usedBandwith * SIMTIME_DBL(simTime() - flowEvent->startOn);
+        auto itStat = sendBytes.find(flowEvent->dest);
+
+        if (itStat == sendBytes.end())
+            sendBytes[flowEvent->dest] = (bsend/1000.0);
+        else
+            itStat->second = (bsend/1000.0);
         delete flowEvent;
     }
+}
+
+void CallApp::newCall() {
+    if (destAddresses.empty())
+        return;
+
+    char pkname[100];
+// Sending packet
+    callCounter++;
+    if (check) {
+        checkAlg();
+        return;
+    }
+    int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
+
+    sprintf(pkname, "CallReserve-%d-to-%d-Call id#%lud-Did-%ld", myAddress,
+            destAddress, callIdentifier, par("sourceId").longValue());
+    EV << "generating packet " << pkname << endl;
+
+    Packet *pk = new Packet(pkname);
+    pk->setType(RESERVE);
+    pk->setReserve(callReserve->doubleValue());
+    pk->setSrcAddr(myAddress);
+    pk->setDestAddr(destAddress);
+    pk->setCallId(callIdentifier);
+    callIdentifier++;
+    if (callIdentifier == 0) // 0 is reserved for flows not assigned to a call.
+        callIdentifier++;
+    pk->setSourceId(par("sourceId"));
+    pk->setDestinationId(par("destinationId"));
+
+    if (rType == DISJOINT) {
+        DijkstraFuzzy::Route r1, r2, min;
+        dijFuzzy->runDisjoint(destAddress);
+        //dijFuzzy->getRoute(destAddress, min, cost);
+        if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
+            DijkstraFuzzy::FuzzyCost costr1, costr2;
+            dijFuzzy->getCostPath(r1, costr1);
+            dijFuzzy->getCostPath(r2, costr2);
+            double total = costr1.exp() + costr2.exp();
+
+            DijkstraFuzzy::Route *r =
+                    uniform(0, total) < costr1.exp() ? &r2 : &r1;
+            pk->setRouteArraySize(r->size());
+            for (unsigned int i = 0; i < r->size(); i++) {
+                pk->setRoute(i, (*r)[i]);
+            }
+        }
+    } else if (rType == SOURCEROUTING) {
+        DijkstraFuzzy::Route min;
+        DijkstraFuzzy::FuzzyCost cost;
+        dijFuzzy->getRoute(destAddress, min, cost);
+        //dijFuzzy->getRoute(destAddress, min, cost);
+        if (dijFuzzy->getRoute(destAddress, min, cost)) {
+            pk->setRouteArraySize(min.size());
+            for (unsigned int i = 0; i < min.size(); i++) {
+                pk->setRoute(i, min[i]);
+            }
+        }
+    }
+
+// TODO : recall timer,
+    send(pk, "out");
+}
+
+void CallApp::newFlow() {
+
+    if (destAddresses.empty())
+        return;
+    char pkname[100];
+
+// generate the next flow
+    int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
+    Packet *pkFlow = new Packet();
+
+    pkFlow->setReserve(flowUsedBandwith->doubleValue());
+    pkFlow->setDestAddr(destAddress);
+    pkFlow->setCallId(0);
+    pkFlow->setSourceId(par("sourceId"));
+    pkFlow->setDestinationId(par("destinationId"));
+    pkFlow->setSrcAddr(myAddress);
+    pkFlow->setFlowId(flowIdentifier++);
+    pkFlow->setType(STARTFLOW);
+
+    sprintf(pkname, "NewFlow-%d-to-%d-Call Id #%lud- Flow Id #%lud -Did-%ld",
+            myAddress, destAddress, pkFlow->getCallId(), pkFlow->getFlowId(),
+            par("sourceId").longValue());
+    pkFlow->setName(pkname);
+
+    send(pkFlow, "out");
+
+    if (hasGUI())
+        getParentModule()->bubble("Generating flow..");
+
+    FlowEvent *event = new FlowEvent;
+    event->dest = destAddress;
+    event->destId = pkFlow->getDestinationId();
+    event->flowId = pkFlow->getFlowId();
+    event->usedBandwith = pkFlow->getReserve();
+    event->startOn = simTime();
+    FlowEvents.insert(std::make_pair(simTime() + flowDuration->doubleValue(), event));
+}
+
+void CallApp::newReserve(Packet *pk)
+{
+    char pkname[100];
+    pk->setType(ACEPTED);
+    pk->setDestAddr(pk->getSrcAddr());
+    pk->setSrcAddr(myAddress);
+    sprintf(pkname, "PkAccepted-%d-to-%d-#%lud-Sid-%d", myAddress,
+            pk->getDestAddr(), pk->getCallId(), this->getIndex());
+    pk->setName(pkname);
+
+    callReceived++;
+
+    auto itAux = activeCalls.find(pk->getCallId());
+    if (itAux != activeCalls.end())
+        throw cRuntimeError("Call id presents in the system");
+
+    CallInfo *callInfo = new CallInfo();
+    callInfo->dest = pk->getDestAddr();
+    callInfo->callId = pk->getCallId();
+    callInfo->sourceId = pk->getSourceId();
+
+    pk->setSourceId(par("sourceId"));
+    pk->setDestinationId(callInfo->sourceId);
+
+    // check in the list of calls
+
+    activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
+    if (generateFlow) {
+        callInfo->state = OFF;
+        callInfo->reservedBandwith = pk->getReserve();
+        callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
+        CallEvents.insert(
+                std::make_pair(simTime() + TimeOff->doubleValue(), callInfo));
+    }
+    else
+        callInfo->state = PASSIVE;
+
+    send(pk, "out");
+}
+
+void CallApp::newAccepted(Packet *pk) {
+
+    // prepare the release
+    char pkname[100];
+
+    pk->setType(RELEASE);
+    pk->setDestAddr(pk->getSrcAddr());
+    pk->setSrcAddr(myAddress);
+    sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress,
+            pk->getDestAddr(), pk->getCallId(), this->getIndex());
+    pk->setName(pkname);
+
+    auto itAux = activeCalls.find(pk->getCallId());
+    if (itAux != activeCalls.end())
+        throw cRuntimeError("Call id presents in the system");
+
+    CallInfo *callInfo = new CallInfo;
+    callInfo->dest = pk->getDestAddr();
+    callInfo->callId = pk->getCallId();
+    callInfo->sourceId = pk->getSourceId();
+
+    activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
+
+    if (generateFlow) {
+        callInfo->state = ON;
+        callInfo->flowId++;
+        callInfo->reservedBandwith = pk->getReserve();
+        callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
+        simtime_t delayAux = TimeOn->doubleValue();
+        callInfo->startOn = simTime();
+        Packet *pkFlow = pk->dup();
+        pkFlow->setSourceId(par("sourceId"));
+        pkFlow->setDestinationId(callInfo->sourceId);
+        pkFlow->setType(STARTFLOW);
+        pkFlow->setReserve(callInfo->usedBandwith);
+        pkFlow->setFlowId(callInfo->flowId);
+        sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d-FlowId-%d", myAddress,
+                pkFlow->getDestAddr(), pkFlow->getCallId(), this->getIndex(),
+                callInfo->flowId);
+        pkFlow->setName(pkname);
+        CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
+        send(pkFlow, "out");
+    }
+    else
+        callInfo->state = PASSIVE;
+    scheduleAt(simTime() + callDuration->doubleValue(), pk);
+}
+
+void CallApp::release(Packet *pk) {
+// Handle incoming packet
+    for (auto it = CallEvents.begin(); it != CallEvents.end();) {
+        if (it->second->callId == pk->getCallId())
+            CallEvents.erase(it++);
+        else
+            ++it;
+    }
+
+// acumular el ancho de banda enviado
+    auto it = activeCalls.find(pk->getCallId());
+    if (it == activeCalls.end())
+        throw cRuntimeError("Call id is not registered");
+
+    CallInfo *callInfo = it->second;
+
+// Accumulate the flows in curse
+    if (callInfo->state == ON) {
+        bytesTraceSend(callInfo);
+        double bsend = callInfo->usedBandwith
+                * SIMTIME_DBL(simTime() - callInfo->startOn);
+        callInfo->acumulateSend += ((bsend)/1000.0);
+    }
+
+    if (callInfo->stateRec == ON) {
+        bytesTraceRec(callInfo);
+        double brec = callInfo->recBandwith
+                * SIMTIME_DBL(simTime() - callInfo->startOnRec);
+        callInfo->acumulateRec += (brec/1000.0);
+    }
+
+// record the statistics
+    auto itAccSend = sendBytes.find(callInfo->dest);
+    auto itAccRec = receivedBytes.find(callInfo->dest);
+
+    if (itAccSend == sendBytes.end())
+        sendBytes[it->second->dest] = callInfo->acumulateSend;
+    else
+        itAccSend->second += callInfo->acumulateSend;
+
+    if (itAccRec == receivedBytes.end())
+        receivedBytes[callInfo->dest] = callInfo->acumulateRec;
+    else
+        itAccRec->second += callInfo->acumulateRec;
+// delete
+    delete callInfo;
+    activeCalls.erase(it);
+
+// if self message send the release message to the other node
+    if (pk->isSelfMessage())
+        send(pk, "out");
+    else {
+        // relese receive nothing more to do
+        delete pk;
+        if (hasGUI()) {
+            getParentModule()->getDisplayString().setTagArg("i", 1, "green");
+            getParentModule()->bubble("Arrived!");
+        }
+    }
+}
+
+void CallApp::procFlowPk(Packet *pk) {
+    FlowIdentification flowId;
+    flowId.callId() = pk->getCallId();
+    flowId.flowId() = pk->getFlowId();
+    flowId.src() = pk->getSrcAddr();
+
+    // auto it = flowStatistics.find(flowId);
+//  if (it == flowStatistics.end())
+//      throw cRuntimeError("Call id is not registered");
+
+    if (pk->getType() == ENDFLOW) {
+        if (flowId.callId() > 0) {
+            auto itAux = activeCalls.find(flowId.callId());
+            CallInfo * callInfo = itAux->second;
+            bytesTraceRec(callInfo);
+
+            double brec = callInfo->recBandwith
+                    * SIMTIME_DBL(simTime() - callInfo->startOnRec);
+            callInfo->acumulateRec += (brec/1000.0);
+            callInfo->stateRec = OFF;
+
+            EV << "Rec Call Id :" << callInfo->callId << "Flow Id :"
+                      << callInfo->flowId << " Time in on :"
+                      << (simTime() - callInfo->startOnRec) << "Brec :" << brec;
+
+        }
+        else {
+            auto it = flowStatistics.find(flowId);
+            if (it == flowStatistics.end())
+                throw cRuntimeError("Flow is not registered");
+            double brec = it->second.used * SIMTIME_DBL(simTime() - it->second.startOnRec);
+
+            auto itStat = receivedBytes.find(flowId.src());
+            if (itStat == receivedBytes.end())
+                receivedBytes[flowId.src()] = (brec/1000.0);
+            else
+                itStat->second = (brec/1000.0);
+            // erase flow
+            flowStatistics.erase(it);
+        }
+    }
+    else if (pk->getType() == STARTFLOW) {
+        if (flowId.callId() > 0) {
+            auto itAux = activeCalls.find(flowId.callId());
+            CallInfo * callInfo = itAux->second;
+            callInfo->recBandwith = (uint64_t) pk->getReserve();
+            callInfo->startOnRec = simTime();
+            callInfo->stateRec = ON;
+        }
+        else {
+            // register the flow;
+            auto it = flowStatistics.find(flowId);
+            if (it != flowStatistics.end())
+                throw cRuntimeError("FLow is already registered");
+
+            FlowStat st;
+            st.startOnRec = simTime();
+            st.used = (uint64_t) pk->getReserve();
+            flowStatistics.insert(std::make_pair(flowId,st));
+        }
+    }
+    else if (pk->getType() == FLOWCHANGE) {
+        if (flowId.callId() > 0) {
+            auto itAux = activeCalls.find(flowId.callId());
+            CallInfo * callInfo = itAux->second;
+            if (callInfo->stateRec == ON) {
+                bytesTraceRec(callInfo);
+                callInfo->acumulateRec += ((callInfo->recBandwith
+                        * SIMTIME_DBL(simTime() - callInfo->startOnRec))/1000);
+            }
+            callInfo->stateRec = ON;
+            callInfo->recBandwith = (uint64_t) pk->getReserve();
+            callInfo->startOnRec = simTime();
+        }
+        else {
+            // register the flow;
+            auto it = flowStatistics.find(flowId);
+            if (it == flowStatistics.end()) {
+                // create
+                FlowStat st;
+                st.startOnRec = simTime();
+                st.used = (uint64_t) pk->getReserve();
+                flowStatistics.insert(std::make_pair(flowId,st));
+            }
+            else {
+                double brec = it->second.used * SIMTIME_DBL(simTime() - it->second.startOnRec);
+                auto itStat = receivedBytes.find(flowId.src());
+                if (itStat == receivedBytes.end())
+                    receivedBytes[flowId.src()] = (brec/1000.0);
+                else
+                    itStat->second = (brec/1000.0);
+                it->second.startOnRec = simTime();
+                it->second.used = (uint64_t) pk->getReserve();
+            }
+        }
+
+    }
+    delete pk;
 }
 
 void CallApp::initialize()
@@ -406,109 +763,24 @@ void CallApp::initialize()
     send(msg, "out");
 
     // register in the root module to receive the actualization of all nodes.
-    cSimulation::getActiveSimulation()->getSystemModule()->subscribe("actualizationSignal",this);
+    cSimulation::getActiveSimulation()->getSystemModule()->subscribe(actualizationSignal,this);
 }
 
 void CallApp::handleMessage(cMessage *msg)
 {
-    char pkname[100];
+
     if (!msg->isPacket()) {
         if (msg == generateCall) {
-            // Sending packet
-            callCounter++;
-            if (check) {
-                checkAlg();
-                return;
-            }
-            int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
-
-            sprintf(pkname, "CallReserve-%d-to-%d-Call id#%lud-Did-%ld", myAddress,
-                    destAddress, callIdentifier, par("sourceId").longValue());
-            EV << "generating packet " << pkname << endl;
-
-            Packet *pk = new Packet(pkname);
-            pk->setType(RESERVE);
-            pk->setReserve(callReserve->doubleValue());
-            pk->setSrcAddr(myAddress);
-            pk->setDestAddr(destAddress);
-            pk->setCallId(callIdentifier);
-            callIdentifier++;
-            if (callIdentifier == 0) // 0 is reserved for flows not assigned to a call.
-                callIdentifier++;
-            pk->setSourceId(par("sourceId"));
-            pk->setDestinationId(par("destinationId"));
-
-
-            if (rType == DISJOINT) {
-                DijkstraFuzzy::Route r1, r2, min;
-                dijFuzzy->runDisjoint(destAddress);
-                //dijFuzzy->getRoute(destAddress, min, cost);
-                if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
-                    DijkstraFuzzy::FuzzyCost costr1, costr2;
-                    dijFuzzy->getCostPath(r1, costr1);
-                    dijFuzzy->getCostPath(r2, costr2);
-                    double total = costr1.exp() + costr2.exp();
-
-                    DijkstraFuzzy::Route *r =
-                            uniform(0, total) < costr1.exp() ? &r2 : &r1;
-                    pk->setRouteArraySize(r->size());
-                    for (unsigned int i = 0; i < r->size(); i++) {
-                        pk->setRoute(i, (*r)[i]);
-                    }
-                }
-            }
-            else if (rType == SOURCEROUTING) {
-                DijkstraFuzzy::Route  min;
-                DijkstraFuzzy::FuzzyCost cost;
-                dijFuzzy->getRoute(destAddress, min, cost);
-                //dijFuzzy->getRoute(destAddress, min, cost);
-                if (dijFuzzy->getRoute(destAddress, min, cost)) {
-                    pk->setRouteArraySize(min.size());
-                    for (unsigned int i = 0; i < min.size(); i++) {
-                        pk->setRoute(i, min[i]);
-                    }
-                }
-            }
-
-            // TODO : recall timer,
-            send(pk, "out");
-
+            newCall();
             if (!destAddresses.empty())
                 scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
             if (hasGUI())
                 getParentModule()->bubble("Generating call..");
         }
         else if (msg == nextFlow) {
-            // generate the next flow
-            int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
-            Packet *pkFlow = new Packet();
-
-
-            pkFlow->setReserve(flowUsedBandwith->doubleValue());
-            pkFlow->setDestAddr(destAddress);
-            pkFlow->setCallId(0);
-            pkFlow->setSourceId(par("sourceId"));
-            pkFlow->setDestinationId(par("destinationId"));
-            pkFlow->setSrcAddr(myAddress);
-            pkFlow->setFlowId(flowIdentifier++);
-            pkFlow->setType(STARTFLOW);
-
-            sprintf(pkname, "NewFlow-%d-to-%d-Call Id #%lud- Flow Id #%lud -Did-%ld", myAddress,
-                                            destAddress, pkFlow->getCallId(),pkFlow->getFlowId(), par("sourceId").longValue());
-            pkFlow->setName(pkname);
-
-            send(pkFlow, "out");
-
-            if (hasGUI())
-                getParentModule()->bubble("Generating flow..");
-
-            FlowEvent *event = new FlowEvent;
-            event->dest = destAddress;
-            event->destId = pkFlow->getDestinationId();
-            event->flowId = pkFlow->getFlowId();
-            event->usedBandwith = pkFlow->getReserve();
-            FlowEvents.insert(std::make_pair(simTime() + flowDuration->doubleValue(), event));
-            scheduleAt(simTime() + flowArrival->doubleValue(), nextFlow);
+            newFlow();
+            if (!destAddresses.empty())
+                scheduleAt(simTime() + flowArrival->doubleValue(), nextFlow);
         }
         else if (msg == nextEvent) {
             procNextEvent();
@@ -552,215 +824,61 @@ void CallApp::handleMessage(cMessage *msg)
         throw cRuntimeError("Packet unknown");
 
     if (pk->getType() == RESERVE) {
-        pk->setType(ACEPTED);
-        pk->setDestAddr(pk->getSrcAddr());
-        pk->setSrcAddr(myAddress);
-        sprintf(pkname, "PkAccepted-%d-to-%d-#%lud-Sid-%d", myAddress, pk->getDestAddr(), pk->getCallId(),
-                this->getIndex());
-        pk->setName(pkname);
-
-        callReceived++;
-
-        auto itAux = activeCalls.find(pk->getCallId());
-        if (itAux != activeCalls.end())
-            throw cRuntimeError("Call id presents in the system");
-
-        CallInfo *callInfo = new CallInfo();
-        callInfo->dest = pk->getDestAddr();
-        callInfo->callId = pk->getCallId();
-        callInfo->sourceId = pk->getSourceId();
-
-        pk->setSourceId(par("sourceId"));
-        pk->setDestinationId(callInfo->sourceId);
-
-        // check in the list of calls
-
-        activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
-        if (generateFlow) {
-            callInfo->state = OFF;
-            callInfo->reservedBandwith = pk->getReserve();
-            callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
-            CallEvents.insert(std::make_pair(simTime() + TimeOff->doubleValue(), callInfo));
-        }
-        else
-            callInfo->state = PASSIVE;
-
-        send(pk, "out");
+       newReserve(pk);
     }
     else if (pk->getType() == ACEPTED) {
-        pk->setType(RELEASE);
-        pk->setDestAddr(pk->getSrcAddr());
-        pk->setSrcAddr(myAddress);
-        sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress, pk->getDestAddr(), pk->getCallId(),
-                this->getIndex());
-        pk->setName(pkname);
-
-        auto itAux = activeCalls.find(pk->getCallId());
-        if (itAux != activeCalls.end())
-            throw cRuntimeError("Call id presents in the system");
-
-        CallInfo *callInfo = new CallInfo;
-        callInfo->dest = pk->getDestAddr();
-        callInfo->callId = pk->getCallId();
-        callInfo->sourceId = pk->getSourceId();
-
-        activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
-
-        if (generateFlow) {
-            callInfo->state = ON;
-            callInfo->flowId++;
-            callInfo->reservedBandwith = pk->getReserve();
-            callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
-            simtime_t delayAux = TimeOn->doubleValue();
-            callInfo->startOn = simTime();
-            Packet *pkFlow = pk->dup();
-            pkFlow->setSourceId(par("sourceId"));
-            pkFlow->setDestinationId(callInfo->sourceId);
-            pkFlow->setType(STARTFLOW);
-            pkFlow->setReserve(callInfo->usedBandwith);
-            pkFlow->setFlowId(callInfo->flowId);
-            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d-FlowId-%d", myAddress, pkFlow->getDestAddr(), pkFlow->getCallId(),
-                    this->getIndex(),callInfo->flowId);
-            pkFlow->setName(pkname);
-            CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
-            send(pkFlow, "out");
-        }
-        else
-            callInfo->state = PASSIVE;
-        scheduleAt(simTime() + callDuration->doubleValue(), pk);
+        newAccepted(pk);
     }
     else if (pk->getType() == RELEASE || pk->getType() == RELEASEDELAYED) {
-        // Handle incoming packet
-        for (auto it = CallEvents.begin(); it != CallEvents.end(); ) {
-            if (it->second->callId == pk->getCallId())
-                CallEvents.erase(it++);
-            else
-                ++it;
-        }
-
-        // acumular el ancho de banda enviado
-        auto it = activeCalls.find(pk->getCallId());
-        if (it == activeCalls.end())
-            throw cRuntimeError("Call id is not registered");
-
-        CallInfo *callInfo = it->second;
-
-        // Accumulate the flows in curse
-        if (callInfo->state == ON) {
-            bytesTraceSend(callInfo);
-            double bsend = callInfo->usedBandwith * SIMTIME_DBL(simTime() - callInfo->startOn);
-            callInfo->acumulateSend += (bsend);
-        }
-
-        if (callInfo->stateRec == ON) {
-            bytesTraceRec(callInfo);
-            double brec = callInfo->recBandwith * SIMTIME_DBL(simTime() - callInfo->startOnRec);
-            callInfo->acumulateRec += (brec);
-        }
-
-        // record the statistics
-        auto itAccSend = sendBytes.find(callInfo->dest);
-        auto itAccRec = receivedBytes.find(callInfo->dest);
-
-        if (itAccSend == sendBytes.end())
-            sendBytes[it->second->dest] = callInfo->acumulateSend;
-        else
-            itAccSend->second += callInfo->acumulateSend;
-
-        if (itAccRec == receivedBytes.end())
-            receivedBytes[callInfo->dest] = callInfo->acumulateRec;
-        else
-            itAccRec->second += callInfo->acumulateRec;
-        // delete
-        delete callInfo;
-        activeCalls.erase(it);
-
-        // if self message send the release message to the other node
-        if (pk->isSelfMessage())
-            send(pk, "out");
-        else {
-            // relese receive nothing more to do
-            delete pk;
-            if (hasGUI()) {
-                getParentModule()->getDisplayString().setTagArg("i", 1, "green");
-                getParentModule()->bubble("Arrived!");
-            }
-        }
+        release(pk);
     }
     else if (pk->getType() == BREAK) {
 
     }
     else // flow control packets, can be used to compute the statistics
     {
-
-        FlowIdentification flowId;
-        flowId.callId() = pk->getCallId();
-        flowId.flowId() = pk->getFlowId();
-        flowId.src() = pk->getSrcAddr();
-
-
-       // auto it = flowStatistics.find(flowId);
-      //  if (it == flowStatistics.end())
-      //      throw cRuntimeError("Call id is not registered");
-
-
-        if (pk->getType() == ENDFLOW) {
-            if (flowId.callId() > 0) {
-                auto itAux = activeCalls.find(flowId.callId());
-                CallInfo * callInfo = itAux->second;
-                bytesTraceRec(callInfo);
-
-                double brec = callInfo->recBandwith * SIMTIME_DBL(simTime() - callInfo->startOnRec);
-                callInfo->acumulateRec += (brec);
-                callInfo->stateRec = OFF;
-
-                EV << "Rec Call Id :" << callInfo->callId << "Flow Id :" << callInfo->flowId <<
-                        " Time in on :" << (simTime() - callInfo->startOnRec) << "Brec :" << brec;
-
-            }
-        }
-        else if (pk->getType() == STARTFLOW) {
-            if (flowId.callId() > 0) {
-                auto itAux = activeCalls.find(flowId.callId());
-                CallInfo * callInfo = itAux->second;
-                callInfo->recBandwith = (uint64_t) pk->getReserve();
-                callInfo->startOnRec = simTime();
-                callInfo->stateRec = ON;
-            }
-        }
-        else if (pk->getType() == FLOWCHANGE) {
-            if (flowId.callId() > 0) {
-                auto itAux = activeCalls.find(flowId.callId());
-                CallInfo * callInfo = itAux->second;
-                if (callInfo->stateRec == ON) {
-                    bytesTraceRec(callInfo);
-                    callInfo->acumulateRec += (callInfo->recBandwith
-                        * SIMTIME_DBL(simTime() - callInfo->startOnRec));
-                }
-                callInfo->stateRec = ON;
-                callInfo->recBandwith = (uint64_t) pk->getReserve();
-                callInfo->startOnRec = simTime();
-            }
-        }
-        delete msg;
+        procFlowPk(pk);
     }
     rescheduleEvent();
 }
 
 void CallApp::finish()
 {
+    // total data of flows and calls that has finished
     long double totalSend = 0;
     long double totalRec = 0;
     for (auto elem : receivedBytes)
         totalRec += elem.second;
     for (auto elem : sendBytes)
         totalSend += elem.second;
+
+    // register call in curse
     for (auto elem : activeCalls) {
         totalRec += elem.second->acumulateRec;
         totalSend += elem.second->acumulateSend;
     }
-    recordScalar("Total Send",totalSend);
-    recordScalar("Total Rec",totalRec);
+    activeCalls.clear();
+
+    // pending flow "end" in transmission
+    while (!FlowEvents.empty()) {
+        // flows that the node is sending
+        auto it = FlowEvents.begin();
+        FlowEvent *flowEvent = it->second;
+        FlowEvents.erase(it);
+        double bsend = flowEvent->usedBandwith * SIMTIME_DBL(simTime() - flowEvent->startOn);
+        totalSend += (bsend/1000);
+        delete flowEvent;
+    }
+    // pending flow "end" in receptions
+    while (!flowStatistics.empty()) {
+        auto it = flowStatistics.begin();
+        double brec = it->second.used * SIMTIME_DBL(simTime() - it->second.startOnRec);
+        totalRec += (brec/1000);
+        flowStatistics.erase(it);
+    }
+
+    recordScalar("Total Send Kb",totalSend);
+    recordScalar("Total Rec Kb",totalRec);
 }
 
 void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
@@ -801,9 +919,10 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
             }
             else {
                 // Usar funciones lineales  o hiperbólicas?
-                minResidual /= linkData.nominal;
-                meanResidual /= linkData.nominal;
-                maxResidual /= linkData.nominal;
+
+                minResidual =  (linkData.min/linkData.nominal);
+                meanResidual = (linkData.mean/linkData.nominal);
+                maxResidual = (linkData.max/linkData.nominal);
             }
             dijFuzzy->addEdge(nodeId,linkData.node,minResidual, meanResidual, maxResidual);
         }

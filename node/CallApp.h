@@ -12,6 +12,7 @@
 #include <omnetpp.h>
 #include "DijkstraFuzzy.h"
 #include "FlowDataTypes.h"
+#include "Packet_m.h"
 
 using namespace omnetpp;
 
@@ -104,6 +105,7 @@ private:
         int destId = 0;
         uint64_t flowId = 0;
         uint64_t usedBandwith = 0;
+        simtime_t startOn;
     };
 
     std::map<FlowIdentification,FlowStat> flowStatistics;
@@ -125,16 +127,24 @@ private:
     bool trace = false;
     void bytesTraceSend(const CallInfo *callInfo);
     void bytesTraceRec(const CallInfo *callInfo);
+    static simsignal_t actualizationSignal;
 public:
     CallApp();
     virtual ~CallApp();
 
 protected:
     using cIListener::finish;
+
     virtual void checkAlg();
     virtual void readTopo();
     virtual void rescheduleEvent();
     virtual void procNextEvent();
+    virtual void newCall();
+    virtual void newFlow();
+    virtual void newReserve(Packet *);
+    virtual void newAccepted(Packet *);
+    virtual void release(Packet *);
+    virtual void procFlowPk(Packet *);
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;

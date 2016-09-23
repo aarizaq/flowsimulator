@@ -55,8 +55,8 @@ private:
     simsignal_t outputIfSignal;
     int localOutSize = 0;
 
-    cMessage *actualizeTimer;
-    cMessage *computeBwTimer;
+    cMessage *actualizeTimer = nullptr;
+    //cMessage *computeBwTimer = nullptr;
 
     static simsignal_t actualizationSignal;
 
@@ -91,6 +91,7 @@ private:
     virtual bool procEndFlow(Packet *);
     virtual void postProc(Packet *, const int&, const int&, const int &);
     virtual void computeUsedBw();
+    virtual void recordOccupation(PortData &port, const ChangeBw &val);
 protected:
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;

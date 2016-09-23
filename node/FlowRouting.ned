@@ -17,7 +17,7 @@ simple FlowRouting
     parameters:
         volatile double actualizeState @unit(s)= default(60s);
         volatile double breakRelease  @unit(s)= default(0);
-        bool emitSignals = default(false);
+        bool actualizeWithSignals = default(false);
         double minimumTimeActualize @unit(s) = default(60s); // minimum time between two actualization messages
         string flowClass = default(""); // como se comporta el router cuando está lleno el canal, como tira los datos
         bool actPercentage = default(false);
@@ -26,6 +26,7 @@ simple FlowRouting
         @display("i=block/switch");
         @signal[drop](type="long");
         @signal[outputIf](type="long");
+        @signal[actualizationSignal](type=Packet);
         @statistic[drop](title="dropped packet byte length";unit=bytes;record=vector?,count,sum;interpolationmode=none);
         @statistic[outputIf](title="output interface for each routed packet";record=histogram;interpolationmode=none);
     gates:

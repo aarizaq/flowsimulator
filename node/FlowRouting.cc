@@ -631,7 +631,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                             }
 
                             pkt->setCallId(elem.first);
-                            pkt->setType(RELEASE);
+                            pkt->setType(RELEASEBREAK);
 
                             if (hasGUI()) {
                                 char pkname[100];
@@ -767,7 +767,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
 
                         // prepare the release of the call with a delay
                         pkt->setCallId(itCallInfo->first);
-                        pkt->setType(RELEASE);
+                        pkt->setType(RELEASEBREAK);
 
                         if (itCallInfo->second.node1 == myAddress && itCallInfo->second.node2 == myAddress) {
                             // se envía hacia el destino, se comprueba
@@ -1174,7 +1174,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
         auto itCallInfo = callInfomap.find(pk->getCallId());
 
         // actions
-        if (pk->getType() == RESERVE) {
+        if (pk->getType() == RESERVE || pk->getType() == RESERVEBK) {
             if (itCallInfo != callInfomap.end())
                 throw cRuntimeError("Error in callId parameter, call exist already : RESERVE");
 
@@ -1186,7 +1186,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
                     delete pk;
                     return false;
                 }
-                else if (pk->getType() == RELEASE) {
+                else if (pk->getType() == RELEASE || pk->getType() == RELEASEBREAK) {
                     // discard
                     delete pk;
                     return false;
@@ -1194,7 +1194,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
                 else
                     throw cRuntimeError("Error in callId parameter, call doesn't exist ");
             }
-            else if (pk->isSelfMessage() && pk->getType() == RELEASE) {
+            else if (pk->isSelfMessage() && (pk->getType() == RELEASE || pk->getType() == RELEASEBREAK)) {
                 // TODO : Micro cortes, comprobar si está el enlace activo.
 
                 if (itCallInfo->second.port1 >= 0) {
@@ -1731,7 +1731,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
 void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId, const int & portForward)
 {
     // check if event is a release type event.
-    bool releaseResources = pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == ENDFLOW || pk->getType() == CROUTEFLOWEND; // end a call
+    bool releaseResources = pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == ENDFLOW || pk->getType() == CROUTEFLOWEND || pk->getType() == RELEASEBREAK; // end a call
 
     if (destAddr == myAddress) {
         EV << "local delivery of packet " << pk->getName() << endl;
@@ -1828,7 +1828,7 @@ void FlowRouting::handleMessage(cMessage *msg)
 
     // processing packets
 
-    if (pk->getType() == RESERVE) {
+    if (pk->getType() == RESERVE || pk->getType() == RESERVEBK) {
         if (!procReserve(pk, portForward, destId)) {
             delete pk;
             return; // nothing more to do
@@ -1882,7 +1882,7 @@ void FlowRouting::handleMessage(cMessage *msg)
         if (portForward == -1 && destAddr != myAddress)
             throw cRuntimeError("Error in forward port identification");
 
-        if (pk->getType() == RELEASE || pk->getType() == REJECTED) {// reject and release free resources.
+        if (pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == RELEASEBREAK) {// reject and release free resources.
             if (itCallInfo->second.port1 >= 0)
                 portDataArray[itCallInfo->second.port1].occupation += itCallInfo->second.reserve;
 

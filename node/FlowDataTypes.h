@@ -125,6 +125,14 @@ struct FlowInfo
     int destId;
     std::vector<int> sourceRouting;
 
+    // this information is used for the store and forward procedure.
+
+    simtime_t start;
+    simtime_t end;
+    cMessage *startMsg = nullptr;
+    cMessage *endMsg = nullptr;
+
+
     bool operator <(const FlowInfo& b) const
     {
         return identify < b.identify;

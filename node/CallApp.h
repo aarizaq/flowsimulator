@@ -26,7 +26,8 @@ protected:
     enum RoutingType {
         HOPBYHOP,
         SOURCEROUTING,
-        DISJOINT
+        DISJOINT,
+        BACKUPROUTE
      };
     RoutingType rType;
 private:
@@ -57,7 +58,7 @@ private:
 
     enum State
     {
-        WAITCONFIRMATION = 0, ON, OFF, ACTIVE, PASSIVE //this call doesn't create flows
+        WAITCONFIRMATION = 0, ON, OFF, ACTIVE, PASSIVE, BACKUP, //this call doesn't create flows
     };
 
     struct FlowData
@@ -86,6 +87,7 @@ private:
         int dest = -1;
         int sourceId = 0;
         uint64_t callId;
+        uint64_t callIdBk = 0;
         uint64_t flowId = 0;
         State state = WAITCONFIRMATION;
         State stateRec = OFF;
@@ -119,6 +121,7 @@ private:
     std::map<int, long double> receivedBytes;
     std::map<int, long double> sendBytes;
     std::map<uint64_t, CallInfo*> activeCalls;
+    std::map<uint64_t, CallInfo*> backupCalls;
 
     bool check = false;
 

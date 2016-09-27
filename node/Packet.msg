@@ -39,6 +39,8 @@ enum PacketCode
     RELEASEDELAYED = 11; // end a call
     CROUTEFLOWSTART = 12; // Change in the routing tables
     CROUTEFLOWEND = 13;
+    RESERVEBK = 14;
+    RELEASEBREAK = 15;
 }
 
 message PendingRelease
@@ -71,6 +73,8 @@ packet Packet extends Base
     uint64_t reserve;
     uint64_t flowId;
     uint64_t callId;
+    uint64_t callIdBk;
+    bool principal = true;
 }
  
 packet Actualize extends Packet

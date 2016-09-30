@@ -174,6 +174,11 @@ void FlowRouting::initialize()
         portDataArray[i].occupation = channel->getNominalDatarate();
         portDataArray[i].flowOcupation = channel->getNominalDatarate();
         portDataArray[i].nominalbw = channel->getNominalDatarate();
+
+        portDataArray[i].max = portDataArray[i].occupation;
+        portDataArray[i].min = portDataArray[i].occupation;
+        portDataArray[i].mean = portDataArray[i].occupation;
+
         portDataArray[i].portStatus = UP;
         portDataArray[i].overload = false;
         ChangeBw val;
@@ -225,9 +230,17 @@ bool FlowRouting::actualize(Actualize *other)
         if (elem.second.state == UP) {
             auxdata.residual = portDataArray[elem.second.port].occupation;
             auxdata.nominal = portDataArray[elem.second.port].nominalbw;
-            auxdata.max = portDataArray[elem.second.port].max;
-            auxdata.min = portDataArray[elem.second.port].min;
-            auxdata.mean = portDataArray[elem.second.port].mean;
+            if (simTime() == simtime_t::ZERO)
+            {
+                auxdata.max = portDataArray[elem.second.port].occupation;
+                auxdata.min = portDataArray[elem.second.port].occupation;
+                auxdata.mean = portDataArray[elem.second.port].occupation;
+            }
+            else {
+                auxdata.max = portDataArray[elem.second.port].max;
+                auxdata.min = portDataArray[elem.second.port].min;
+                auxdata.mean = portDataArray[elem.second.port].mean;
+            }
             portDataArray[elem.second.port].lastInfoOcupation = portDataArray[elem.second.port].occupation;
             portDataArray[elem.second.port].lastInfoNominal = portDataArray[elem.second.port].nominalbw;
         }
@@ -682,6 +695,10 @@ void FlowRouting::processLinkEvents(cObject *obj)
                         portDataArray[i].occupation = portDataArray[i].nominalbw;
                         portDataArray[i].flowOcupation = portDataArray[i].nominalbw;
                         portDataArray[i].portStatus = UP;
+                        portDataArray[i].max = portDataArray[i].occupation;
+                        portDataArray[i].min = portDataArray[i].occupation;
+                        portDataArray[i].mean = portDataArray[i].occupation;
+
                         ChangeBw val;
                         val.instant = simTime();
                         val.value = portDataArray[i].flowOcupation;

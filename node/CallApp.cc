@@ -150,9 +150,36 @@ void CallApp::readTopo()
         cTopology::Node *node = topo.getNode(i);
         int address = node->getModule()->par("address");
         for (int j = 0; j < node->getNumOutLinks(); j++) {
+
             int addressAux = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
-            dijFuzzy->addEdge(address, addressAux, 1, 2, 3);
-            dj.addEdge(address, addressAux,1,10000);
+
+            double minResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();;
+            double meanResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();;
+            double maxResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();;
+
+            if (residual) {
+                if (minResidual < 0.0001)
+                    minResidual = 1 / 0.0001;
+                else
+                    minResidual = 1 / minResidual;
+
+                if (meanResidual < 0.0001)
+                    meanResidual = 1 / 0.0001;
+                else
+                    meanResidual = 1 / meanResidual;
+
+                if (maxResidual < 0.0001)
+                    maxResidual = 1 / 0.0001;
+                else
+                    maxResidual = 1 / maxResidual;
+            } else {
+                // Usar funciones lineales  o hiperbólicas?
+                minResidual = 1;
+                meanResidual = 1;
+                maxResidual = 1;
+            }
+            dijFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
+            dj.addEdge(address, addressAux, 1, 10000);
         }
     }
     NodePairs links;
@@ -1133,6 +1160,9 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
                 meanResidual = (linkData.mean/linkData.nominal);
                 maxResidual = (linkData.max/linkData.nominal);
             }
+
+            if (minResidual == 0)
+                throw cRuntimeError("Problems detected");
             dijFuzzy->addEdge(nodeId,linkData.node,minResidual, meanResidual, maxResidual);
         }
     }

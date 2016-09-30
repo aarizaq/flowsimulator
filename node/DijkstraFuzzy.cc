@@ -270,7 +270,7 @@ void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
             FuzzyCost cost;
 
             // check if the node is in the path
-            if (std::find(pathNode.begin(), pathNode.end(), current_edge->last_node()) != pathNode.end())
+            if (std::find(pathActive.begin(), pathActive.end(), current_edge->last_node()) != pathActive.end())
                 continue;
 
             auto itNext = routeMap.find(current_edge->last_node());
@@ -351,7 +351,11 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
         Route pathNode;
         NodeId currentNode = elem.iD;
         while (currentNode != rootNode) {
+            // check if the node is in the path
+            if (std::find(pathActive.begin(),pathActive.end(),currentNode) != pathActive.end())
+                throw cRuntimeError("error in data");;
             pathActive.push_back(currentNode);
+
             currentNode = itAux->second.idPrev;
             itAux = routeMap.find(currentNode);
             if (itAux == routeMap.end())
@@ -371,7 +375,7 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
             FuzzyCost cost;
 
             // check if the node is in the path
-            if (std::find(pathNode.begin(),pathNode.end(),current_edge->last_node()) != pathNode.end())
+            if (std::find(pathActive.begin(),pathActive.end(),current_edge->last_node()) != pathActive.end())
                 continue;
 
             RouteMap::iterator itNext = routeMap.find(current_edge->last_node());

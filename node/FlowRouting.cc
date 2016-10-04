@@ -18,6 +18,7 @@
 Define_Module(FlowRouting);
 
 simsignal_t FlowRouting::actualizationSignal = registerSignal("actualizationSignal");
+simsignal_t FlowRouting::eventSignal = registerSignal("EventSignal");
 
 // TODO: Mecanismos de reserva y comparticion cuando los enlaces estan llenos, el ancho de banda se reparte y se puede cambiar el ancho de banda en funcion del reparto.
 
@@ -119,7 +120,6 @@ void FlowRouting::computeUsedBw()
 
 void FlowRouting::initialize()
 {
-    eventSignal = registerSignal("EventSignal");
     getSimulation()->getSystemModule()->subscribe(eventSignal, this);
 
     myAddress = getParentModule()->par("address");

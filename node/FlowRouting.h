@@ -64,7 +64,7 @@ private:
 
     simtime_t lastTimeActualize;
 
-    simsignal_t eventSignal;
+    static simsignal_t eventSignal;
 
     bool inmediateNotificationLink = false;
 

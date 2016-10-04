@@ -18,7 +18,33 @@
 #include <failureModule.h>
 #include <stdlib.h>     /* atoi */
 
-simtime_t failureModule::rdUniform(cXMLAttributeMap attributes)
+Define_Module(FailureModule);
+
+
+simsignal_t FailureModule::eventSignal = registerSignal("EventSignal");
+
+std::ostream& operator<<(std::ostream& os, const Event& e)
+{
+    os << e.info();
+    return os;
+};
+
+
+std::string FailureModule::detailedInfo() const
+{
+    std::stringstream out;
+
+    if (eventList.empty())
+        out << "Event list empty";
+    for (auto elem : eventList) {
+        out << "Event time : " << elem.first;
+        out << "  Event - " << elem.second.info();
+        out << endl;
+    }
+    return out.str();
+}
+
+simtime_t FailureModule::rdUniform(cXMLAttributeMap &attributes)
 {
     if (!_hasKey(attributes, "beginning"))
         throw "Undefined parameter for random distribution. Beginning must be defined for a normal distribution";
@@ -29,7 +55,7 @@ simtime_t failureModule::rdUniform(cXMLAttributeMap attributes)
     return omnetpp::uniform(getEnvir()->getRNG(0), m_beginning, m_end);
 }
 
-simtime_t failureModule::rdExponential(cXMLAttributeMap attributes)
+simtime_t FailureModule::rdExponential(cXMLAttributeMap &attributes)
 {
 
     if (!_hasKey(attributes, "mean"))
@@ -53,7 +79,7 @@ simtime_t failureModule::rdExponential(cXMLAttributeMap attributes)
 
 }
 
-simtime_t failureModule::rdNormal(cXMLAttributeMap attributes)
+simtime_t FailureModule::rdNormal(cXMLAttributeMap &attributes)
 {
 
     if (!_hasKey(attributes, "mean"))
@@ -68,7 +94,7 @@ simtime_t failureModule::rdNormal(cXMLAttributeMap attributes)
     return omnetpp::normal(getEnvir()->getRNG(0), m_mean, m_stddev);
 }
 
-simtime_t failureModule::rdConstant(cXMLAttributeMap attributes)
+simtime_t FailureModule::rdConstant(cXMLAttributeMap &attributes)
 {
     if (!_hasKey(attributes, "value"))
         throw "No value specified";
@@ -76,7 +102,7 @@ simtime_t failureModule::rdConstant(cXMLAttributeMap attributes)
     return m_value;
 }
 
-simtime_t failureModule::procDistribution(cXMLAttributeMap attributes)
+simtime_t FailureModule::procDistribution(cXMLAttributeMap &attributes)
 {
     std::string typeName = attributes["distribution"];
     std::string dt;
@@ -94,19 +120,18 @@ simtime_t failureModule::procDistribution(cXMLAttributeMap attributes)
     }
 }
 
-failureModule::failureModule()
+FailureModule::FailureModule()
 {
-    // TODO Auto-generated constructor stub
-
+    timer = new cMessage("Failure-timer");
 }
 
-failureModule::~failureModule()
+FailureModule::~FailureModule()
 {
     // TODO Auto-generated destructor stub
     cancelAndDelete(timer);
 }
 
-LinkId failureModule::getNode(cXMLAttributeMap attributes)
+LinkId FailureModule::getNode(cXMLAttributeMap attributes)
 {
 // enlace random
 
@@ -183,7 +208,7 @@ LinkId failureModule::getNode(cXMLAttributeMap attributes)
     return std::make_pair(-1, -1);
 }
 
-simtime_t failureModule::createEvent(LinkId nodeId, cXMLAttributeMap attributes, const simtime_t &base, const CONFIGURATION_TYPE &evType)
+simtime_t FailureModule::createEvent(const LinkId &nodeId, cXMLAttributeMap &attributes, const simtime_t &base, const CONFIGURATION_TYPE &evType)
 {
     simtime_t start;
     simtime_t distTime;
@@ -201,16 +226,13 @@ simtime_t failureModule::createEvent(LinkId nodeId, cXMLAttributeMap attributes,
     if (!hasStart && !hasDistribution)
         throw cRuntimeError("No tiene referencia temporal de inicio, ni start ni distribution");
 
-    if (_hasKey(attributes, "absolutetime")) {
-        absolutetime = true;
-    }
-
     simtime_t timeEvent = start + distTime;
     if (!absolutetime)
         timeEvent += base;
 
     // introducir evento en la lista.
     Event event;
+    event.linkId = nodeId;
     if (evType == FAILURE) {
         if (nodeId.second == -1)
             event.type = NODE_FAILURE_EV;
@@ -227,45 +249,52 @@ simtime_t failureModule::createEvent(LinkId nodeId, cXMLAttributeMap attributes,
     return timeEvent;
 }
 
-void failureModule::create(std::pair<int, int> nodeId, cXMLElement *element, int repeat)
+simtime_t FailureModule::create(const LinkId &nodeId, cXMLElement *element,const simtime_t &base)
 {
-    simtime_t base;
-    for (int i = 0; i < repeat; i++) {
-
-        for (cXMLElement * el = element; el != nullptr; el = el->getNextSibling()) {
-            std::string typeName(el->getTagName());
-            cXMLAttributeMap attributes = el->getAttributes();
-
-            CONFIGURATION_TYPE dt;
-            if (typeName == "FALIURE") {
-                dt = FAILURE;
-            }
-            else if (typeName == "RECOVERY") {
-                dt = RECOVERY;
-            }
-            else
-                return;
-
-            base = createEvent(nodeId, attributes, base, dt);
-
+    cXMLAttributeMap attributes = element->getAttributes();
+    simtime_t baseValue = base;
+    if (_hasKey(attributes, "type")) {
+        CONFIGURATION_TYPE dt;
+        if (attributes["type"] == "FAILURE") {
+            dt = FAILURE;
         }
+        else if (attributes["type"] == "RECOVERY") {
+            dt = RECOVERY;
+        }
+        else
+            throw cRuntimeError("Action type must be FAILURE or RECOVERY");
+        baseValue = createEvent(nodeId, attributes, baseValue, dt);
     }
+    else
+        throw cRuntimeError("Action doesn't have type");
+    return baseValue;
 }
 
-void failureModule::parser(cXMLElement *rootelement)
+void FailureModule::parser(cXMLElement *rootelement)
 {
+    if (!rootelement->hasChildren())
+        return;
+
     topo = new cTopology("topo");
     topo->extractByProperty("node");
 
-    // Activity period length -- the waking period
-    for (cXMLElement *element = rootelement->getFirstChildWithTag("activity"); element != nullptr;
-            element = element->getNextSiblingWithTag("activity")) {
+    cXMLElementList elements = rootelement->getChildrenByTagName("eventsnode");
+    for (auto & element : elements) {
         cXMLAttributeMap attributes = element->getAttributes();
         std::pair<int, int> nodeId = getNode(attributes);
+        cXMLElementList actionsList = element->getChildrenByTagName("action");
+        int repeat = 1;
+        simtime_t basetime;
+        if (_hasKey(attributes, "basetime"))
+            basetime = atof(attributes["basetime"].c_str());
+
         if (_hasKey(attributes, "repeat"))
-            create(nodeId, element->getFirstChild(), atoi(attributes["repeat"].c_str()));
-        else
-            create(nodeId, element->getFirstChild());
+            repeat = atoi(attributes["repeat"].c_str());
+        for (int i = 0; i < repeat; i++) {
+            for (auto & action : actionsList) {
+                 basetime = create(nodeId, action, basetime);
+            }
+        }
     }
     delete topo;
 
@@ -320,16 +349,18 @@ void failureModule::parser(cXMLElement *rootelement)
     }
 }
 
-void failureModule::initialize(int stage)
+void FailureModule::initialize(int stage)
 {
     if (stage < numInitStages() - 1)
         return;
     eventSignal = registerSignal("EventSignal");
+    configuration = par("config");
+    parser(configuration);
     if (!eventList.empty())
         scheduleAt(eventList.begin()->first, timer);
 }
 
-void failureModule::handleMessage(cMessage *msg)
+void FailureModule::handleMessage(cMessage *msg)
 {
 
     if (msg == timer) {

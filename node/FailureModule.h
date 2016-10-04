@@ -29,7 +29,7 @@ using namespace omnetpp;
 typedef std::pair<int, int> LinkId;
 #endif
 
-class failureModule : public cSimpleModule
+class FailureModule : public cSimpleModule
 {
     enum CONFIGURATION_TYPE
     {
@@ -38,25 +38,27 @@ class failureModule : public cSimpleModule
 
     typedef std::multimap<simtime_t, Event> EventList;
     EventList eventList;
-    cMessage *timer;
-    simsignal_t eventSignal;
+    cMessage *timer = nullptr;
+    static simsignal_t eventSignal;
+
+    cXMLElement *configuration = nullptr;
 
     cTopology *topo = nullptr;
-    bool _hasKey(cXMLAttributeMap attributes, std::string key)
+    bool _hasKey(const cXMLAttributeMap &attributes, const std::string &key)
     {
         return attributes.find(key) != attributes.end();
     }
-    simtime_t rdNormal(cXMLAttributeMap attributes);
-    simtime_t rdUniform(cXMLAttributeMap attributes);
-    simtime_t rdExponential(cXMLAttributeMap attributes);
+    simtime_t rdNormal(cXMLAttributeMap &attributes);
+    simtime_t rdUniform(cXMLAttributeMap &attributes);
+    simtime_t rdExponential(cXMLAttributeMap &attributes);
     simtime_t rdConstant(double value);
-    simtime_t rdConstant(cXMLAttributeMap attributes);
-    simtime_t procDistribution(cXMLAttributeMap attributes);
+    simtime_t rdConstant(cXMLAttributeMap &attributes);
+    simtime_t procDistribution(cXMLAttributeMap &attributes);
 
-    virtual void create(LinkId, cXMLElement *, int = 1);
+    virtual simtime_t create(const LinkId &, cXMLElement *, const simtime_t&);
     virtual std::pair<int, int> getNode(cXMLAttributeMap attributes);
 
-    simtime_t createEvent(LinkId nodeId, cXMLAttributeMap attributes, const simtime_t &base, const CONFIGURATION_TYPE &);
+    simtime_t createEvent(const LinkId &nodeId, cXMLAttributeMap &attributes, const simtime_t &base, const CONFIGURATION_TYPE &);
 
 public:
     virtual void initialize(int) override;
@@ -65,9 +67,10 @@ public:
         return 2;
     }
     virtual void handleMessage(cMessage *) override;
-    failureModule();
-    virtual ~failureModule();
+    FailureModule();
+    virtual ~FailureModule();
     virtual void parser(cXMLElement *rootelement);
+    virtual std::string detailedInfo() const override;
 };
 
 #endif /* FAILUREMODULE_H_ */

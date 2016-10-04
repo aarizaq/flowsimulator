@@ -26,6 +26,24 @@ struct Event : public cObject
     {
         return type == o.type && linkId == o.linkId;
     }
+    std::string info() const override
+    {
+        std::stringstream out;
+
+        out << "Type: ";
+        if (type == NODE_FAILURE_EV)
+            out << "Node Failure  ";
+        else  if (type == LINK_FAILURE_EV)
+            out << "Link Failure  ";
+        else if (type == NODE_RECOVERY_EV)
+            out << "Node recovery  ";
+        else  if (type == LINK_RECOVERY_EV)
+            out << "Link recovery  ";
+
+        out << " Node origin : " << linkId.first;
+        out << " Node end : " << linkId.second;
+        return out.str();
+    }
 };
 
 #endif /* FAILUREEVENT_H_ */

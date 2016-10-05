@@ -793,7 +793,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     // prepare the release of the call with a delay
                     pkt->setCallId(elem.first);
                     pkt->setType(RELEASEBREAK);
-                    if (elem.second.node1 == myAddress && elem.second.node2 == myAddress) {
+                    if (elem.second.node1 == myAddress || elem.second.node2 == myAddress) {
                         // se envía hacia el destino, se comprueba
                         Packet * pktAux = pkt->dup();
                         if (elem.second.node1 == myAddress) {
@@ -821,13 +821,17 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     }
                     //pkt->setKind(forwartPort);
 
-                    if (elem.second.node1 == myAddress && elem.second.node2 == myAddress)
-                        send(pkt, "out", forwartPort);
+                    if (forwartPort != -1) {
+                        if (elem.second.node1 == myAddress && elem.second.node2 == myAddress)
+                            send(pkt, "out", forwartPort);
                         //scheduleAt(simTime(), pkt); // release immediately
-                    else
-                        sendDelayed(pkt,par("breakRelease"), "out", forwartPort);
+                        else
+                            sendDelayed(pkt,par("breakRelease"), "out", forwartPort);
                         //scheduleAt(simTime() + par("breakRelease"), pkt); // release with a delay
-                    elem.second.state = END;
+                        elem.second.state = END;
+                    }
+                    else
+                        delete pkt;
                 }
                 if (!endCalls) {
                     for (auto it = inputFlows.begin(); it != inputFlows.end();) {

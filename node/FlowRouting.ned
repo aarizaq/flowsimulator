@@ -22,6 +22,7 @@ simple FlowRouting
         string flowClass = default(""); // como se comporta el router cuando está lleno el canal, como tira los datos
         bool actPercentage = default(false);
         double percentage = default(0.1);
+        volatile double breakDelay @unit(s) = default(0s);
          
         @display("i=block/switch");
         @signal[drop](type="long");

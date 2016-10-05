@@ -547,7 +547,8 @@ void FlowRouting::processLinkEvents(cObject *obj)
     if (event) {
         int neigAddr = -1;
         bool process = false;
-        if (event->linkId.first == myAddress || event->linkId.second == -1) {
+        bool endCalls = false;
+        if (event->linkId.first == myAddress && event->linkId.second == -1) {
             // general failure
             process = true;
             neigAddr = -1;
@@ -562,15 +563,14 @@ void FlowRouting::processLinkEvents(cObject *obj)
                     throw cRuntimeError("Neighbor address not found check break event list");
             }
             else {
+                endCalls = true;
                 neigAddr = event->linkId.first;
                 auto itNeig = neighbors.find(event->linkId.first);
                 if (itNeig == neighbors.end())
                     throw cRuntimeError("Neighbor address not found check break event list");
             }
-
         }
-        else if (event->linkId.first != myAddress || event->linkId.second == -1) // node failure check if it is a neighbor
-                {
+        else if (event->linkId.first != myAddress && event->linkId.second == -1) {// node failure check if it is a neighbor
             auto itNeig = neighbors.find(event->linkId.first);
             if (itNeig != neighbors.end()) {
                 neigAddr = event->linkId.first;
@@ -717,11 +717,16 @@ void FlowRouting::processLinkEvents(cObject *obj)
                 if (itNeig == neighbors.end())
                     throw cRuntimeError("Neighbor address not found check break event list");
                 // search in the list the flows and active calls
-                itNeig->second.state = DOWN;
-                portDataArray[itNeig->second.port].portStatus = DOWN;
+
+                if (!endCalls) {
+                    itNeig->second.state = DOWN; // only unidirectional
+                    portDataArray[itNeig->second.port].portStatus = DOWN;
+                }
+
                 itNeig->second.failureTime = simTime();
-                std::vector<std::pair<int, int> > breakCommunication;
-                for (auto itCallInfo = callInfomap.begin(); itCallInfo != callInfomap.end(); ++itCallInfo) {
+                CallInfoMap breakCommunication;
+                // list of call that must end
+                for (auto itCallInfo = callInfomap.begin(); itCallInfo != callInfomap.end(); ) {
                     if (itCallInfo->second.port1 == itNeig->second.port
                             || itCallInfo->second.port2 == itNeig->second.port) {
                         //if (itCallInfo->second.port1 >= 0)
@@ -729,165 +734,177 @@ void FlowRouting::processLinkEvents(cObject *obj)
 
                         //if (itCallInfo->second.port2 >= 0)
                         //    ocupation[itCallInfo->second.port2] += itCallInfo->second.reserve;
-
-                        while (!itCallInfo->second.outputFlows.empty()) {
-                            FlowInfo flowinfo = itCallInfo->second.outputFlows.back();
-                            itCallInfo->second.outputFlows.pop_back();
-                            if (flowinfo.port != itNeig->second.port) {
-                                // free bandwidth
-                                portDataArray[flowinfo.port].flowOcupation += flowinfo.used;
-                                ChangeBw val;
-                                val.instant = simTime();
-                                val.value = portDataArray[flowinfo.port].flowOcupation;
-                                recordOccupation(portDataArray[flowinfo.port], val);
-                                // Send end flow
-                                Packet *pkt = new Packet();
-                                pkt->setType(ENDFLOW);
-                                pkt->setFlowId(flowinfo.identify.flowId());
-                                pkt->setSrcAddr(flowinfo.identify.src());
-                                pkt->setSourceId(flowinfo.identify.srcId());
-                                if (itCallInfo->second.node1 == flowinfo.identify.src())
-                                    pkt->setDestAddr(itCallInfo->second.node2);
-                                else
-                                    pkt->setDestAddr(itCallInfo->second.node1);
-                                if (hasGUI()) {
-                                    char pkname[100];
-                                    sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
-                                            pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
-                                    pkt->setName(pkname);
-                                }
-                                send(pkt, "out", flowinfo.port);
-                            }
-                        }
-
-                        // send call release messages
-                        Packet *pkt = new Packet();
-                        int forwartPort;
-                        // check the direction that it is necessary to send the packet
-                        if (itNeig->second.port == itCallInfo->second.port2) {
-                            forwartPort = itCallInfo->second.port1;
-                            pkt->setSrcAddr(itCallInfo->second.node1);
-                            pkt->setDestAddr(itCallInfo->second.node2);
-                            pkt->setSourceId(itCallInfo->second.applicationId1);
-                            pkt->setDestinationId(itCallInfo->second.applicationId2);
-
-                        }
-                        else if (itNeig->second.port == itCallInfo->second.port1) {
-                            forwartPort = itCallInfo->second.port2;
-                            pkt->setSrcAddr(itCallInfo->second.node2);
-                            pkt->setDestAddr(itCallInfo->second.node1);
-                            pkt->setSourceId(itCallInfo->second.applicationId2);
-                            pkt->setDestinationId(itCallInfo->second.applicationId1);
-                        }
-                        else
-                            throw cRuntimeError("Unknown port");
-
-                        // prepare the release of the call with a delay
-                        pkt->setCallId(itCallInfo->first);
-                        pkt->setType(RELEASEBREAK);
-
-                        if (itCallInfo->second.node1 == myAddress && itCallInfo->second.node2 == myAddress) {
-                            // se envía hacia el destino, se comprueba
-
-                            Packet * pktAux = pkt->dup();
-                            if (itCallInfo->second.node1 == myAddress) {
-                                pktAux->setSrcAddr(itCallInfo->second.node2);
-                                pktAux->setDestAddr(itCallInfo->second.node1);
-                                pktAux->setSourceId(itCallInfo->second.applicationId2);
-                                pktAux->setDestinationId(itCallInfo->second.applicationId1);
-                            }
-                            else {
-                                pktAux->setSrcAddr(itCallInfo->second.node1);
-                                pktAux->setDestAddr(itCallInfo->second.node2);
-                                pktAux->setSourceId(itCallInfo->second.applicationId1);
-                                pktAux->setDestinationId(itCallInfo->second.applicationId2);
-                            }
-                            auto it = sourceIdGate.find(pktAux->getDestinationId());
-                            if (it == sourceIdGate.end())
-                                throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
-
+                        breakCommunication.insert(std::make_pair(itCallInfo->first,itCallInfo->second));
+                        callInfomap.erase(itCallInfo++);
+                    }
+                    else
+                        ++itCallInfo;
+                }
+                for (auto elem : breakCommunication ){
+                    while (!elem.second.outputFlows.empty()) {
+                        FlowInfo flowinfo = elem.second.outputFlows.back();
+                        elem.second.outputFlows.pop_back();
+                        if (flowinfo.port != itNeig->second.port) {
+                            // free bandwidth
+                            portDataArray[flowinfo.port].flowOcupation += flowinfo.used;
+                            ChangeBw val;
+                            val.instant = simTime();
+                            val.value = portDataArray[flowinfo.port].flowOcupation;
+                            recordOccupation(portDataArray[flowinfo.port], val);
+                            // Send end flow
+                            Packet *pkt = new Packet();
+                            pkt->setType(ENDFLOW);
+                            pkt->setFlowId(flowinfo.identify.flowId());
+                            pkt->setSrcAddr(flowinfo.identify.src());
+                            pkt->setSourceId(flowinfo.identify.srcId());
+                            if (elem.second.node1 == flowinfo.identify.src())
+                                pkt->setDestAddr(elem.second.node2);
+                            else
+                                pkt->setDestAddr(elem.second.node1);
                             if (hasGUI()) {
                                 char pkname[100];
-                                printf(pkname, "ReleaseL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
-                                    pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                                        pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                                 pkt->setName(pkname);
                             }
-                            send(pktAux, "localOut", it->second);
+                            send(pkt, "out", flowinfo.port);
                         }
-
-                        pkt->setKind(forwartPort);
-                        if (itCallInfo->second.node1 == myAddress && itCallInfo->second.node2 == myAddress)
-                            scheduleAt(simTime(), pkt); // release immediately
-                        else
-                            scheduleAt(simTime() + par("breakRelease"), pkt); // release with a delay
-                        itCallInfo->second.state = END;
                     }
-                }
-                for (auto it = inputFlows.begin(); it != inputFlows.end();) {
-                    if ((it->second.port != -1 && it->second.portInput != -1)
-                            && (portDataArray[it->second.port].portStatus == UP && portDataArray[it->second.portInput].portStatus == UP)) {
-                        ++it;
-                        continue;
+                    // send call release messages
+                    Packet *pkt = new Packet();
+                    int forwartPort;
+                    // check the direction that it is necessary to send the packet
+                    if (itNeig->second.port == elem.second.port2) {
+                        forwartPort = elem.second.port1;
+                        pkt->setSrcAddr(elem.second.node1);
+                        pkt->setDestAddr(elem.second.node2);
+                        pkt->setSourceId(elem.second.applicationId1);
+                        pkt->setDestinationId(elem.second.applicationId2);
                     }
-                    else if ((it->second.port != -1) && (portDataArray[it->second.port].portStatus == UP)) {
-                        ++it;
-                        continue;
+                    else if (itNeig->second.port == elem.second.port1) {
+                        forwartPort = elem.second.port2;
+                        pkt->setSrcAddr(elem.second.node2);
+                        pkt->setDestAddr(elem.second.node1);
+                        pkt->setSourceId(elem.second.applicationId2);
+                        pkt->setDestinationId(elem.second.applicationId1);
                     }
-                    else if ((it->second.portInput != -1) && (portDataArray[it->second.portInput].portStatus == UP)) {
-                        ++it;
-                        continue;
-                    }
-                    if (it->second.dest == myAddress) {
-                        // send end flow to application {
-                        Packet *pkt = new Packet();
-                        pkt->setCallId(0);
-                        pkt->setType(ENDFLOW);
-                        pkt->setFlowId(it->second.identify.flowId());
-                        pkt->setSrcAddr(it->second.identify.src());
-                        pkt->setSourceId(it->second.identify.srcId());
-                        pkt->setDestAddr(myAddress);
-                        pkt->setDestinationId(it->second.destId);
-                        auto itAux = sourceIdGate.find(pkt->getDestinationId());
-                        if (itAux == sourceIdGate.end())
+                    else
+                        throw cRuntimeError("Unknown port");
+                    // prepare the release of the call with a delay
+                    pkt->setCallId(elem.first);
+                    pkt->setType(RELEASEBREAK);
+                    if (elem.second.node1 == myAddress && elem.second.node2 == myAddress) {
+                        // se envía hacia el destino, se comprueba
+                        Packet * pktAux = pkt->dup();
+                        if (elem.second.node1 == myAddress) {
+                            pktAux->setSrcAddr(elem.second.node2);
+                            pktAux->setDestAddr(elem.second.node1);
+                            pktAux->setSourceId(elem.second.applicationId2);
+                            pktAux->setDestinationId(elem.second.applicationId1);
+                        }
+                        else {
+                            pktAux->setSrcAddr(elem.second.node1);
+                            pktAux->setDestAddr(elem.second.node2);
+                            pktAux->setSourceId(elem.second.applicationId1);
+                            pktAux->setDestinationId(elem.second.applicationId2);
+                        }
+                        auto it = sourceIdGate.find(pktAux->getDestinationId());
+                        if (it == sourceIdGate.end())
                             throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
-                        send(pkt, "localOut", itAux->second);
-                    }
-                    inputFlows.erase(it++);
-                }
-                for (auto it = outputFlows.begin(); it != outputFlows.end();) {
-                    if ((it->second.port != -1 && it->second.portInput != -1)
-                            && (portDataArray[it->second.port].portStatus == UP && portDataArray[it->second.portInput].portStatus == UP)) {
-                        ++it;
-                        continue;
-                    }
-                    else if ((it->second.port != -1) && (portDataArray[it->second.port].portStatus == UP)) {
-                        ++it;
-                        continue;
-                    }
-                    else if ((it->second.portInput != -1) && (portDataArray[it->second.portInput].portStatus == UP)) {
-                        ++it;
-                        continue;
-                    }
-                    // send end flow to the other part
-                    if (portDataArray[it->second.port].portStatus == UP) {
-                        // send end flow to application {
-                        Packet *pkt = new Packet();
-                        pkt->setCallId(0);
-                        pkt->setType(ENDFLOW);
-                        pkt->setFlowId(it->second.identify.flowId());
-                        pkt->setSrcAddr(it->second.identify.src());
-                        pkt->setSourceId(it->second.identify.srcId());
-                        pkt->setDestAddr(it->second.dest);
-                        pkt->setDestinationId(it->second.destId);
                         if (hasGUI()) {
                             char pkname[100];
-                            sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
+                            printf(pkname, "ReleaseL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkt->getSrcAddr(),
                                     pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                             pkt->setName(pkname);
                         }
-                        send(pkt, "out", it->second.port);
+                        send(pktAux, "localOut", it->second);
                     }
-                    outputFlows.erase(it++);
+                    //pkt->setKind(forwartPort);
+
+                    if (elem.second.node1 == myAddress && elem.second.node2 == myAddress)
+                        send(pkt, "out", forwartPort);
+                        //scheduleAt(simTime(), pkt); // release immediately
+                    else
+                        sendDelayed(pkt,par("breakRelease"), "out", forwartPort);
+                        //scheduleAt(simTime() + par("breakRelease"), pkt); // release with a delay
+                    elem.second.state = END;
+                }
+                if (!endCalls) {
+                    for (auto it = inputFlows.begin(); it != inputFlows.end();) {
+                        if ((it->second.port != -1 && it->second.portInput != -1)
+                                && (portDataArray[it->second.port].portStatus == UP && portDataArray[it->second.portInput].portStatus == UP)) {
+                            ++it;
+                            continue;
+                        }
+                        else if ((it->second.port != -1) && (portDataArray[it->second.port].portStatus == UP)) {
+                            ++it;
+                            continue;
+                        }
+                        else if ((it->second.portInput != -1) && (portDataArray[it->second.portInput].portStatus == UP)) {
+                            ++it;
+                            continue;
+                        }
+                        if (it->second.dest == myAddress) {
+                            // send end flow to application {
+                            Packet *pkt = new Packet();
+                            pkt->setCallId(0);
+                            pkt->setType(ENDFLOW);
+                            pkt->setFlowId(it->second.identify.flowId());
+                            pkt->setSrcAddr(it->second.identify.src());
+                            pkt->setSourceId(it->second.identify.srcId());
+                            pkt->setDestAddr(myAddress);
+                            pkt->setDestinationId(it->second.destId);
+                            auto itAux = sourceIdGate.find(
+                                    pkt->getDestinationId());
+                            if (itAux == sourceIdGate.end())
+                                throw cRuntimeError(
+                                        "Source id %i not registered",
+                                        pkt->getDestinationId());
+                            send(pkt, "localOut", itAux->second);
+                        }
+                        inputFlows.erase(it++);
+                    }
+                    for (auto it = outputFlows.begin(); it != outputFlows.end();) {
+                        if ((it->second.port != -1 && it->second.portInput != -1)
+                                && (portDataArray[it->second.port].portStatus == UP
+                                        && portDataArray[it->second.portInput].portStatus == UP)) {
+                            ++it;
+                            continue;
+                        }
+                        else if ((it->second.port != -1)
+                                && (portDataArray[it->second.port].portStatus == UP)) {
+                            ++it;
+                            continue;
+                        }
+                        else if ((it->second.portInput != -1)
+                                && (portDataArray[it->second.portInput].portStatus == UP)) {
+                            ++it;
+                            continue;
+                        }
+                        // send end flow to the other part
+                        if (portDataArray[it->second.port].portStatus == UP) {
+                            // send end flow to application {
+                            Packet *pkt = new Packet();
+                            pkt->setCallId(0);
+                            pkt->setType(ENDFLOW);
+                            pkt->setFlowId(it->second.identify.flowId());
+                            pkt->setSrcAddr(it->second.identify.src());
+                            pkt->setSourceId(it->second.identify.srcId());
+                            pkt->setDestAddr(it->second.dest);
+                            pkt->setDestinationId(it->second.destId);
+                            if (hasGUI()) {
+                                char pkname[100];
+                                sprintf(pkname,
+                                        "EndFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i",
+                                        pkt->getSrcAddr(), pkt->getDestAddr(),
+                                        pkt->getCallId(), pkt->getFlowId(),
+                                        pkt->getDestinationId());
+                                pkt->setName(pkname);
+                            }
+                            send(pkt, "out", it->second.port);
+                        }
+                        outputFlows.erase(it++);
+                    }
                 }
             }
             else if (event->type == NODE_RECOVERY_EV || event->type == LINK_RECOVERY_EV) {
@@ -932,20 +949,23 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
         return false;
 
     auto it = rtable.end();
-    int port1 = -1;
-    int port2 = -1;
+    int outPort = -1; // port of the next node
+    int inputPort = -1; // port to the previous node
     int destAddr = pk->getDestAddr();
     int srcAddr = pk->getSrcAddr();
+    int portInput = -1;
+
     bool rejected = false;
-    if (destAddr != myAddress) {
+
+    if (portInput != -1 && portDataArray[portInput].portStatus == DOWN) // Impossible bidirectional communications
+        rejected = true;
+
+    if (destAddr != myAddress && !rejected) { // if rejected = true it isn't necessary more checks
         // Internal routing table,
         if (pk->getRouteArraySize() == 0) {
             it = rtable.find(destAddr);
             if (it != rtable.end())
-                port1 = (*it).second;
-            // check port status
-            if (port1 != -1 && portDataArray[port1].portStatus == DOWN)
-                rejected = true;
+                outPort = (*it).second;
         }
         else {
             // Source routing case
@@ -964,26 +984,26 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
             auto itNeig = neighbors.find(next);
             if (itNeig == neighbors.end())
                 throw cRuntimeError("Neighbor node not found");
-            port1 = itNeig->second.port;
-            // check neighbor port status
-            if (itNeig->second.state == DOWN)
-                rejected = true;
+            outPort = itNeig->second.port;
         }
+        // check next hop port status
+        if (outPort != -1 && portDataArray[outPort].portStatus == DOWN) // check link status
+            rejected = true;
     }
 
     // check if it is possible reserve enough bandwidth in both directions
     if (srcAddr != myAddress) {
-        port2 = pk->getArrivalGate()->getIndex();
+        inputPort = pk->getArrivalGate()->getIndex();
     }
 
-    if ((port1 != -1 && portDataArray[port1].occupation < pk->getReserve())
-            && (port2 != -1 && portDataArray[port2].occupation < pk->getReserve()))
-        rejected = true;
+    if (!rejected) {
+        if ((outPort != -1 && portDataArray[outPort].occupation < pk->getReserve())
+            && (inputPort != -1 && portDataArray[inputPort].occupation < pk->getReserve()))
+            rejected = true;
+        if (outPort == -1 && destAddr != myAddress)
+            rejected = true;
+    }
 
-    if (port1 == -1 && destAddr != myAddress)
-        rejected = true;
-
-    // check link status
     if (rejected) {
         // reject call
         Packet *pkt = pk->dup();
@@ -1014,26 +1034,26 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
     }
 
     // enough resources, bandwidth reserved.
-    if (port1 != -1)
-        portDataArray[port1].occupation -= pk->getReserve();
+    if (outPort != -1)
+        portDataArray[outPort].occupation -= pk->getReserve();
 
-    if (port2 != -1)
-        portDataArray[port2].occupation -= pk->getReserve();
+    if (inputPort != -1)
+        portDataArray[inputPort].occupation -= pk->getReserve();
 
     actualizePercentaje();
 
     CallInfo callInfo;
     callInfo.node1 = pk->getSrcAddr();
     callInfo.node2 = pk->getDestAddr();
-    callInfo.port1 = port1;
-    callInfo.port2 = port2;
+    callInfo.port1 = outPort;
+    callInfo.port2 = inputPort;
     callInfo.reserve = pk->getReserve();
     callInfo.applicationId1 = pk->getSourceId();
     callInfo.applicationId2 = pk->getDestinationId();
 
     callInfomap.insert(std::make_pair(pk->getCallId(),callInfo));
 
-    portForward = port1;
+    portForward = outPort;
     destId = callInfo.applicationId2;
     return true;
 }
@@ -1890,10 +1910,6 @@ void FlowRouting::handleMessage(cMessage *msg)
                 destId = pk->getDestinationId();
             }
         }
-
-        if (srcAddr != myAddress)
-            portInput = pk->getArrivalGate()->getIndex();
-
 
         // check that the forward port is correctly set
         if (portForward == -1 && destAddr != myAddress)

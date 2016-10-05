@@ -56,7 +56,7 @@ private:
     cMessage *nextFlow = nullptr;
 
     long callCounter = 0; // number of call generated
-    long callStabilized  = 0; // number of call stabilized
+    long callEstabilized  = 0; // number of call stabilized
     long callReceived = 0;
 
 

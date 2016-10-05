@@ -707,7 +707,7 @@ void CallApp::newAccepted(Packet *pk) {
         } else
             callInfo->state = PASSIVE;
         // prepare release event
-        callStabilized++;
+        callEstabilized++;
 
         pk->setType(RELEASE);
         pk->setDestAddr(pk->getSrcAddr());
@@ -1182,6 +1182,10 @@ void CallApp::finish()
 
     recordScalar("Total Send Kb",totalSend);
     recordScalar("Total Rec Kb",totalRec);
+
+    recordScalar("Total calls generated",callCounter);
+    recordScalar("Total calls established",callEstabilized);
+    recordScalar("Total calls received",callReceived);
 }
 
 void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)

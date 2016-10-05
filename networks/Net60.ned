@@ -11,6 +11,7 @@ package networks;
 
 import node.Node;
 import ned.DatarateChannel;
+import node.FailureModule;
 
 //
 // A network topology commonly known as the "NTT backbone".
@@ -29,6 +30,10 @@ network Net60
             parameters:
                 address = index;
         }
+        failure: FailureModule {
+            @display("p=19,17;is=s");
+        }
+
     connections allowunconnected:
         rte[0].port++ <--> C <--> rte[1].port++;
         rte[1].port++ <--> C <--> rte[2].port++;

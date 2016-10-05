@@ -306,6 +306,8 @@ void CallApp::procNextEvent()
                         pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
                 pkFlow->setName(pkname);
             }
+            if (pkFlow->getDestAddr() == myAddress)
+                throw cRuntimeError("Destination address erroneous");
             send(pkFlow, "out");
             CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
         }
@@ -346,6 +348,8 @@ void CallApp::procNextEvent()
                 }
 
                 elem.nextEvent = simTime() + delayAux;
+                if (pkFlow->getDestAddr() == myAddress)
+                    throw cRuntimeError("Destination address erroneous");
                 send(pkFlow, "out");
                 CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
             }
@@ -373,6 +377,8 @@ void CallApp::procNextEvent()
                 myAddress, pkFlow->getDestAddr(),
                 pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
         pkFlow->setName(pkname);
+        if (pkFlow->getDestAddr() == myAddress)
+            throw cRuntimeError("Destination address erroneous");
         send(pkFlow, "out");
         double bsend = flowEvent->usedBandwith * SIMTIME_DBL(simTime() - flowEvent->startOn);
         auto itStat = sendBytes.find(flowEvent->dest);
@@ -477,6 +483,16 @@ void CallApp::newCall() {
             for (unsigned int i = 0; i < r2.size(); i++) {
                 pk->setRoute(i, r2[i]);
             }
+
+            if (costr1 < costr2)
+                pk2->setType(RESERVEBK);
+            else {
+                pk->setType(RESERVEBK);
+                Packet *auxMsg = pk2;
+                pk2 = pk;
+                pk = auxMsg;
+            }
+            // send before the best
             send(pk2, "out");
         }
     }
@@ -509,7 +525,8 @@ void CallApp::newFlow() {
             myAddress, destAddress, pkFlow->getCallId(), pkFlow->getFlowId(),
             par("sourceId").longValue());
     pkFlow->setName(pkname);
-
+    if (pkFlow->getDestAddr() == myAddress)
+        throw cRuntimeError("Destination address erroneous");
     send(pkFlow, "out");
 
     if (hasGUI())
@@ -526,76 +543,83 @@ void CallApp::newFlow() {
 
 void CallApp::newReserve(Packet *pk)
 {
+
+    CallInfo *callInfo = nullptr;
+    auto itAux = activeCalls.find(pk->getCallId());
+
+    if (itAux != activeCalls.end())
+        throw cRuntimeError("Call id presents in the system");
+
+    auto itAux2 = backupCalls.find(pk->getCallId());
+    if (itAux2 != backupCalls.end())
+        throw cRuntimeError("Call id presents in the system");
+
+
+    bool activeCall = true;
+    if (itAux == activeCalls.end() &&  pk->getCallIdBk() == 0) {
+        callInfo = new CallInfo();
+        callInfo->dest = pk->getSrcAddr();
+        callInfo->sourceId = pk->getSourceId();
+        callInfo->callId = pk->getCallId();
+        callInfo->callIdBk = pk->getCallIdBk();
+        if (callInfo->dest == myAddress)
+            throw cRuntimeError("Address destination Error");
+        activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
+        callReceived++;
+    }
+    else if (itAux == activeCalls.end() &&  pk->getCallIdBk() != 0) {
+        // check if the other call exist
+        auto itAux2 = activeCalls.find(pk->getCallIdBk());
+        if (itAux2 != activeCalls.end()) { // store this like backup
+            // sanity check
+            auto itAuxSanity = backupCalls.find(pk->getCallIdBk());
+            if (itAuxSanity != backupCalls.end())
+                throw cRuntimeError("Call id presents in the system, bk list");
+            CallInfo * callInfo = itAux2->second;
+            callInfo->callIdBk = pk->getCallId();
+            if (callInfo->dest == myAddress)
+                throw cRuntimeError("Address destination Error");
+            backupCalls.insert(std::make_pair(pk->getCallId(), callInfo));
+            activeCall = false;
+        }
+        else {
+            // there isn't any available, create a new information
+            callInfo = new CallInfo();
+            callInfo->dest = pk->getSrcAddr();
+            callInfo->sourceId = pk->getSourceId();
+            callInfo->callId = pk->getCallId();
+            callInfo->callIdBk = 0; //
+            if (callInfo->dest == myAddress)
+                throw cRuntimeError("Address destination Error");
+            activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
+            callReceived++;
+        }
+    }
+
+    // check in the list of calls
+
+    if (activeCall) {
+        if (generateFlow) {
+            callInfo->state = OFF;
+            callInfo->reservedBandwith = pk->getReserve();
+            callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
+            CallEvents.insert(std::make_pair(simTime() + TimeOff->doubleValue(), callInfo));
+        }
+        else
+            callInfo->state = PASSIVE;
+    }
+    // return acceptance packet
     char pkname[100];
-    int code = pk->getType();
     pk->setType(ACEPTED);
     pk->setDestAddr(pk->getSrcAddr());
     pk->setSrcAddr(myAddress);
     sprintf(pkname, "PkAccepted-%d-to-%d-#%lud-Sid-%d", myAddress,
             pk->getDestAddr(), pk->getCallId(), this->getIndex());
     pk->setName(pkname);
-
-    callReceived++;
-
-    CallInfo *callInfo = nullptr;
-    auto itAux = activeCalls.find(pk->getCallId());
-    auto itAux2 = backupCalls.find(pk->getCallId());
-
-    if (itAux != activeCalls.end() && code ==  RESERVE)
-        throw cRuntimeError("Call id presents in the system");
-
-    if ( code ==  RESERVEBK)
-    {
-        pk->setPrincipal(false); // backup route
-        if (itAux2 != backupCalls.end())
-            throw cRuntimeError("Call id presents in the system");
-    }
-
-    if (itAux == activeCalls.end() && itAux2 == backupCalls.end()) {
-        callInfo = new CallInfo();
-        callInfo->dest = pk->getDestAddr();
-        callInfo->sourceId = pk->getSourceId();
-        if (code ==  RESERVE) {
-            callInfo->callId = pk->getCallId();
-            callInfo->callIdBk = pk->getCallIdBk();
-            activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
-        }
-        else {
-            callInfo->callIdBk = pk->getCallId();
-            callInfo->callId = pk->getCallIdBk();
-            backupCalls.insert(std::make_pair(callInfo->callIdBk, callInfo));
-        }
-
-    }
-    else if (itAux != activeCalls.end()) {
-        callInfo = itAux->second;
-        if (callInfo->callIdBk !=  pk->getCallId())
-            throw cRuntimeError("Call id backup problem");
-        backupCalls.insert(std::make_pair(callInfo->callIdBk, callInfo));
-    }
-    else if (itAux2 != backupCalls.end()) {
-        callInfo = itAux2->second;
-        if (callInfo->callId !=  pk->getCallId())
-            throw cRuntimeError("Call id problem with backup");
-        activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
-    }
-
+    pk->setDestinationId(pk->getSourceId());
     pk->setSourceId(par("sourceId"));
-    pk->setDestinationId(callInfo->sourceId);
-
-    // check in the list of calls
-
-
-    if (generateFlow) {
-        if (code != RESERVEBK) {
-            callInfo->state = OFF;
-            callInfo->reservedBandwith = pk->getReserve();
-            callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
-            CallEvents.insert(std::make_pair(simTime() + TimeOff->doubleValue(), callInfo));
-        }
-    }
-    else
-        callInfo->state = PASSIVE;
+    if (pk->getDestAddr() == myAddress)
+        throw cRuntimeError("Destination address erroneous");
     send(pk, "out");
 }
 
@@ -605,32 +629,57 @@ void CallApp::newAccepted(Packet *pk) {
 
     CallInfo *callInfo = nullptr;
 
+    auto itAux = activeCalls.find(pk->getCallId());
 
-    if (pk->getPrincipal()) {
-        auto itAux = activeCalls.find(pk->getCallId());
-        if (itAux != activeCalls.end())
-            throw cRuntimeError("Call id presents in the system");
+    if (itAux != activeCalls.end())
+        throw cRuntimeError("Call id presents in the system");
 
-        char pkname[100];
+    auto itAux2 = backupCalls.find(pk->getCallId());
+    if (itAux2 != backupCalls.end())
+        throw cRuntimeError("Call id presents in the system");
 
-        pk->setType(RELEASE);
-        pk->setDestAddr(pk->getSrcAddr());
-        pk->setSrcAddr(myAddress);
-        sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress,
-                pk->getDestAddr(), pk->getCallId(), this->getIndex());
-        pk->setName(pkname);
 
-        auto itAux2 = backupCalls.find(pk->getCallIdBk());
-        if (itAux2 != backupCalls.end())
-            callInfo = itAux2->second;
-        else
-            callInfo = new CallInfo;
-
-        callInfo->dest = pk->getDestAddr();
+    bool activeCall = true;
+    // check if exist the backup
+    if (pk->getCallIdBk() != 0) {
+        auto itAux3 = activeCalls.find(pk->getCallIdBk());
+        if (itAux3 != activeCalls.end()) {
+            callInfo = itAux3->second;
+            callInfo->callIdBk = pk->getCallIdBk();
+            if (callInfo->dest == myAddress)
+                throw cRuntimeError("Address destination Error");
+            backupCalls.insert(std::make_pair(callInfo->callId, callInfo));
+            activeCall = false;
+        }
+        else {// check alternative list
+            auto itAux3 = backupCalls.find(pk->getCallIdBk());
+            if (itAux3 != backupCalls.end()) {
+                callInfo = itAux3->second;
+            }
+            else {
+                callInfo = new CallInfo;
+                callInfo->dest = pk->getSrcAddr();
+                callInfo->callId = pk->getCallId();
+                callInfo->sourceId = pk->getSourceId();
+            }
+            if (callInfo->dest == myAddress)
+                throw cRuntimeError("Address destination Error");
+            activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
+        }
+    }
+    else {
+        callInfo = new CallInfo;
+        callInfo->dest = pk->getSrcAddr();
         callInfo->callId = pk->getCallId();
         callInfo->sourceId = pk->getSourceId();
+        if (callInfo->dest == myAddress)
+            throw cRuntimeError("Address destination Error");
         activeCalls.insert(std::make_pair(callInfo->callId, callInfo));
+    }
 
+
+    if (activeCall) {
+        char pkname[100];
         if (generateFlow) {
             callInfo->state = ON;
             callInfo->flowId++;
@@ -638,41 +687,41 @@ void CallApp::newAccepted(Packet *pk) {
             callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
             simtime_t delayAux = TimeOn->doubleValue();
             callInfo->startOn = simTime();
-            Packet *pkFlow = pk->dup();
+            Packet *pkFlow = new Packet();
             pkFlow->setSourceId(par("sourceId"));
             pkFlow->setDestinationId(callInfo->sourceId);
+            pkFlow->setSrcAddr(myAddress);
+            pkFlow->setDestAddr(callInfo->dest);
             pkFlow->setType(STARTFLOW);
             pkFlow->setReserve(callInfo->usedBandwith);
             pkFlow->setFlowId(callInfo->flowId);
+            pkFlow->setCallId(callInfo->callId);
             sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d-FlowId-%d", myAddress,
                     pkFlow->getDestAddr(), pkFlow->getCallId(),
                     this->getIndex(), callInfo->flowId);
             pkFlow->setName(pkname);
             CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
+            if (pkFlow->getDestAddr() == myAddress)
+                throw cRuntimeError("Destination address erroneous");
             send(pkFlow, "out");
         } else
             callInfo->state = PASSIVE;
+        // prepare release event
+        callStabilized++;
+
+        pk->setType(RELEASE);
+        pk->setDestAddr(pk->getSrcAddr());
+        pk->setSrcAddr(myAddress);
+        pk->setDestinationId(pk->getSourceId());
+        pk->setSourceId(par("sourceId"));
+
+        sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress,
+                pk->getDestAddr(), pk->getCallId(), this->getIndex());
+        pk->setName(pkname);
         scheduleAt(simTime() + callDuration->doubleValue(), pk);
     }
     else
     {
-        auto itAux = backupCalls.find(pk->getCallId());
-        if (itAux != backupCalls.end())
-            throw cRuntimeError("Call id presents in the system");
-
-        auto itAux2 = activeCalls.find(pk->getCallIdBk());
-        if (itAux2 != activeCalls.end()) {
-                callInfo = itAux->second;
-                callInfo->callIdBk = pk->getCallId();
-        }
-        else {
-            callInfo = new CallInfo;
-            callInfo->dest = pk->getDestAddr();
-            callInfo->callIdBk = pk->getCallId();
-            callInfo->callId = pk->getCallIdBk();
-            callInfo->sourceId = pk->getSourceId();
-            backupCalls.insert(std::make_pair(callInfo->callIdBk, callInfo));
-        }
         delete pk;
     }
 }
@@ -683,7 +732,7 @@ void CallApp::release(Packet *pk) {
 
     auto it = activeCalls.find(pk->getCallId());
     auto it2 = backupCalls.find(pk->getCallId());
-    if (it == activeCalls.end() && it2 == activeCalls.end()) {
+    if (it == activeCalls.end() && it2 == backupCalls.end()) {
         if (!pk->isSelfMessage()) // si se ha libreador por rotura debería haber llegado a la otra parte el relese con lo cual no debe mandar el mensaje de release otra vez
             throw cRuntimeError("Call Id not found in any list");
         else {
@@ -712,6 +761,8 @@ void CallApp::release(Packet *pk) {
             pkt->setCallId(it->second->callIdBk);
             auto itAux =  backupCalls.find(it->second->callIdBk);
             backupCalls.erase(itAux);
+            if (pkt->getDestAddr() == myAddress)
+                throw cRuntimeError("Destination address erroneous");
             send(pkt, "out");
             it->second->callIdBk = 0;
         }
@@ -762,13 +813,15 @@ void CallApp::release(Packet *pk) {
             uint64_t callidBk = callInfo->callIdBk;
             callInfo->callIdBk = 0;
             callInfo->callId = callidBk;
+            if (callInfo->dest == myAddress)
+                throw cRuntimeError("Address destination Error");
             activeCalls.insert(std::make_pair(callInfo->callId,callInfo));
             callInfo->state = OFF;
             CallEvents.insert(std::make_pair(simTime()+TimeOff->doubleValue(),callInfo));
         }
         else {
             delete callInfo;
-             activeCalls.erase(it);
+            activeCalls.erase(it);
         }
     }
     else if (it2 != backupCalls.end())
@@ -780,8 +833,11 @@ void CallApp::release(Packet *pk) {
     }
 
 // if self message send the release message to the other node
-    if (pk->isSelfMessage())
+    if (pk->isSelfMessage()) {
+        if (pk->getDestAddr() == myAddress)
+            throw cRuntimeError("Destination address erroneous");
         send(pk, "out");
+    }
     else {
         // relese receive nothing more to do
         delete pk;
@@ -797,6 +853,8 @@ void CallApp::procFlowPk(Packet *pk) {
     flowId.callId() = pk->getCallId();
     flowId.flowId() = pk->getFlowId();
     flowId.src() = pk->getSrcAddr();
+    flowId.srcId() = pk->getSourceId();
+
 
     // auto it = flowStatistics.find(flowId);
 //  if (it == flowStatistics.end())
@@ -805,6 +863,8 @@ void CallApp::procFlowPk(Packet *pk) {
     if (pk->getType() == ENDFLOW) {
         if (flowId.callId() > 0) {
             auto itAux = activeCalls.find(flowId.callId());
+            if (itAux == activeCalls.end())
+                throw cRuntimeError("Call id not found but flow recieved");
             CallInfo * callInfo = itAux->second;
             bytesTraceRec(callInfo);
 
@@ -852,9 +912,14 @@ void CallApp::procFlowPk(Packet *pk) {
                 itAux = activeCalls.find(callId);
                 if (itAux != activeCalls.end())
                     activeCalls.erase(itAux);
+
+                if (callInfo->dest == myAddress)
+                    throw cRuntimeError("Address destination Error");
+
                 if (callId != 0)
                     backupCalls.insert(std::make_pair(callId,callInfo));
                 activeCalls.insert(std::make_pair(calIdbk,callInfo));
+
                 //
                 if (callInfo->state == ON) {
                     for (auto it = CallEvents.begin(); it != CallEvents.end();) {
@@ -880,6 +945,8 @@ void CallApp::procFlowPk(Packet *pk) {
 
                     sprintf(pkname,"FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
                     pkFlow->setName(pkname);
+                    if (pkFlow->getDestAddr() == myAddress)
+                        throw cRuntimeError("Destination address erroneous");
                     send(pkFlow, "out");
                     CallEvents.insert(std::make_pair(simTime()+TimeOff->doubleValue(), callInfo));
                 }

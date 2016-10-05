@@ -46,15 +46,19 @@ private:
     cPar *flowDuration = nullptr;
     cPar *flowUsedBandwith = nullptr;
 
-    // state
+    // identifiers
     static uint64_t callIdentifier;
     uint64_t flowIdentifier = 0;
+
+    // event messages
     cMessage *generateCall = nullptr;
     cMessage *nextEvent = nullptr;
     cMessage *nextFlow = nullptr;
 
-    long callCounter = 0;
+    long callCounter = 0; // number of call generated
+    long callStabilized  = 0; // number of call stabilized
     long callReceived = 0;
+
 
     enum State
     {

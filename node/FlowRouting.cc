@@ -227,7 +227,7 @@ bool FlowRouting::actualize(Actualize *other)
     for (auto elem : neighbors) {
         LinkData auxdata;
         auxdata.node = elem.first;
-        if (elem.second.state == UP) {
+        if (portDataArray[elem.second.port].portStatus == UP) {
             auxdata.residual = portDataArray[elem.second.port].occupation;
             auxdata.nominal = portDataArray[elem.second.port].nominalbw;
             if (simTime() == simtime_t::ZERO)
@@ -244,7 +244,7 @@ bool FlowRouting::actualize(Actualize *other)
             portDataArray[elem.second.port].lastInfoOcupation = portDataArray[elem.second.port].occupation;
             portDataArray[elem.second.port].lastInfoNominal = portDataArray[elem.second.port].nominalbw;
         }
-        else if (elem.second.state == DOWN) {
+        else if (portDataArray[elem.second.port].portStatus  == DOWN) {
             auxdata.residual = 0;
             auxdata.nominal = 0;
             if (portDataArray[elem.second.port].lastInfoNominal !=0) {

@@ -268,7 +268,7 @@ void CallApp::procNextEvent()
 
         pkFlow->setDestAddr(callInfo->dest);
         pkFlow->setCallId(callInfo->callId);
-        pkFlow->setSourceId(par("sourceId"));
+        pkFlow->setSourceId(par("sourceId").longValue());
         pkFlow->setDestinationId(callInfo->sourceId);
         pkFlow->setSrcAddr(myAddress);
 
@@ -365,7 +365,7 @@ void CallApp::procNextEvent()
         pkFlow->setReserve(flowEvent->usedBandwith);
         pkFlow->setDestAddr(flowEvent->dest);
         pkFlow->setCallId(0);
-        pkFlow->setSourceId(par("sourceId"));
+        pkFlow->setSourceId(par("sourceId").longValue());
         pkFlow->setDestinationId(flowEvent->destId);
         pkFlow->setSrcAddr(myAddress);
         //callInfo->acumulateSend += (callInfo->usedBandwith
@@ -417,11 +417,12 @@ void CallApp::newCall() {
     callIdentifier++;
     if (callIdentifier == 0) // 0 is reserved for flows not assigned to a call.
         callIdentifier++;
-    pk->setSourceId(par("sourceId"));
-    pk->setDestinationId(par("destinationId"));
+    pk->setSourceId(par("sourceId").longValue());
+    pk->setDestinationId(par("destinationId").longValue());
 
     if (rType == DISJOINT) {
         DijkstraFuzzy::Route r1, r2, min;
+        dijFuzzy->setRoot(getParentModule()->par("address"));
         dijFuzzy->runDisjoint(destAddress);
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
@@ -441,7 +442,9 @@ void CallApp::newCall() {
     else if (rType == SOURCEROUTING) {
         DijkstraFuzzy::Route min;
         DijkstraFuzzy::FuzzyCost cost;
-        dijFuzzy->getRoute(destAddress, min, cost);
+        dijFuzzy->setRoot(getParentModule()->par("address"));
+        if (!dijFuzzy->getRoute(destAddress, min, cost))
+            dijFuzzy->run();
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (dijFuzzy->getRoute(destAddress, min, cost)) {
             pk->setRouteArraySize(min.size());
@@ -453,6 +456,7 @@ void CallApp::newCall() {
     else if (rType == BACKUPROUTE) {
         // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
         DijkstraFuzzy::Route r1, r2, min;
+        dijFuzzy->setRoot(getParentModule()->par("address"));
         dijFuzzy->runDisjoint(destAddress);
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
@@ -461,18 +465,15 @@ void CallApp::newCall() {
             dijFuzzy->getCostPath(r2, costr2);
 
             // new call id for backup route
-            uint64_t bkId = callIdentifier;
-            uint64_t callId = pk->getCallId();
+            Packet *pk2 = pk->dup();
+            pk2->setCallId(callIdentifier);
             callIdentifier++;
 
-            Packet *pk2 = pk->dup();
+            pk2->setCallIdBk(pk->getCallId());
+            pk->setCallIdBk(pk2->getCallId());
 
-            pk2->setCallId(callId); // pk3 contains the principal route.
-            pk2->setCallIdBk(bkId);
-
-            pk->setCallId(bkId);
-            pk->setCallIdBk(callId);
-            pk->setPrincipal(false); // pk contains backup route
+            if (pk2->getCallId() == 10)
+                printf("");
 
             pk2->setRouteArraySize(r1.size());
             for (unsigned int i = 0; i < r1.size(); i++) {
@@ -515,8 +516,8 @@ void CallApp::newFlow() {
     pkFlow->setReserve(flowUsedBandwith->doubleValue());
     pkFlow->setDestAddr(destAddress);
     pkFlow->setCallId(0);
-    pkFlow->setSourceId(par("sourceId"));
-    pkFlow->setDestinationId(par("destinationId"));
+    pkFlow->setSourceId(par("sourceId").longValue());
+    pkFlow->setDestinationId(par("destinationId").longValue());
     pkFlow->setSrcAddr(myAddress);
     pkFlow->setFlowId(flowIdentifier++);
     pkFlow->setType(STARTFLOW);
@@ -553,7 +554,6 @@ void CallApp::newReserve(Packet *pk)
     auto itAux2 = backupCalls.find(pk->getCallId());
     if (itAux2 != backupCalls.end())
         throw cRuntimeError("Call id presents in the system");
-
 
     bool activeCall = true;
     if (itAux == activeCalls.end() &&  pk->getCallIdBk() == 0) {
@@ -617,7 +617,7 @@ void CallApp::newReserve(Packet *pk)
             pk->getDestAddr(), pk->getCallId(), this->getIndex());
     pk->setName(pkname);
     pk->setDestinationId(pk->getSourceId());
-    pk->setSourceId(par("sourceId"));
+    pk->setSourceId(par("sourceId").longValue());
     if (pk->getDestAddr() == myAddress)
         throw cRuntimeError("Destination address erroneous");
     send(pk, "out");
@@ -645,10 +645,10 @@ void CallApp::newAccepted(Packet *pk) {
         auto itAux3 = activeCalls.find(pk->getCallIdBk());
         if (itAux3 != activeCalls.end()) {
             callInfo = itAux3->second;
-            callInfo->callIdBk = pk->getCallIdBk();
+            callInfo->callIdBk = pk->getCallId();
             if (callInfo->dest == myAddress)
                 throw cRuntimeError("Address destination Error");
-            backupCalls.insert(std::make_pair(callInfo->callId, callInfo));
+            backupCalls.insert(std::make_pair(callInfo->callIdBk, callInfo));
             activeCall = false;
         }
         else {// check alternative list
@@ -688,7 +688,7 @@ void CallApp::newAccepted(Packet *pk) {
             simtime_t delayAux = TimeOn->doubleValue();
             callInfo->startOn = simTime();
             Packet *pkFlow = new Packet();
-            pkFlow->setSourceId(par("sourceId"));
+            pkFlow->setSourceId(par("sourceId").longValue());
             pkFlow->setDestinationId(callInfo->sourceId);
             pkFlow->setSrcAddr(myAddress);
             pkFlow->setDestAddr(callInfo->dest);
@@ -713,7 +713,7 @@ void CallApp::newAccepted(Packet *pk) {
         pk->setDestAddr(pk->getSrcAddr());
         pk->setSrcAddr(myAddress);
         pk->setDestinationId(pk->getSourceId());
-        pk->setSourceId(par("sourceId"));
+        pk->setSourceId(par("sourceId").longValue());
 
         sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress,
                 pk->getDestAddr(), pk->getCallId(), this->getIndex());
@@ -729,7 +729,6 @@ void CallApp::newAccepted(Packet *pk) {
 void CallApp::release(Packet *pk) {
 
     // Handle incoming packet
-
     auto it = activeCalls.find(pk->getCallId());
     auto it2 = backupCalls.find(pk->getCallId());
     if (it == activeCalls.end() && it2 == backupCalls.end()) {
@@ -901,7 +900,7 @@ void CallApp::procFlowPk(Packet *pk) {
                 // check backup
                 itAux = backupCalls.find(flowId.callId());
                 if (itAux == backupCalls.end())
-                    throw cRuntimeError("Call Id not found in any list");
+                    throw cRuntimeError("Call Id not found in any list %i",flowId.callId());
                 // change to backup route
                 callInfo = itAux->second;
                 uint64_t callId = callInfo->callId;
@@ -910,6 +909,8 @@ void CallApp::procFlowPk(Packet *pk) {
                 callInfo->callIdBk = callId;
                 backupCalls.erase(itAux);
                 itAux = activeCalls.find(callId);
+                if (pk->getCallId() == 10)
+                    printf("");
                 if (itAux != activeCalls.end())
                     activeCalls.erase(itAux);
 
@@ -936,7 +937,7 @@ void CallApp::procFlowPk(Packet *pk) {
                     Packet *pkFlow = new Packet();
                     pkFlow->setDestAddr(callInfo->dest);
                     pkFlow->setCallId(callId);
-                    pkFlow->setSourceId(par("sourceId"));
+                    pkFlow->setSourceId(par("sourceId").longValue());
                     pkFlow->setDestinationId(callInfo->sourceId);
                     pkFlow->setType(ENDFLOW);
                     pkFlow->setFlowId(callInfo->flowId);
@@ -1062,7 +1063,7 @@ void CallApp::initialize()
     nextEvent = new cMessage("NewEvent");
     readTopo();
     RegisterMsg * msg = new RegisterMsg();
-    msg->setSourceId(par("sourceId"));
+    msg->setSourceId(par("sourceId").longValue());
     send(msg, "out");
 
     // register in the root module to receive the actualization of all nodes.

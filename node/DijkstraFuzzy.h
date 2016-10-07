@@ -102,6 +102,7 @@ public:
         {
             cost = 1e30;
             cost2 = 0;
+            last_node_ = -1;
         }
 
         Edge(const Edge &other)
@@ -325,7 +326,7 @@ public:
     DijkstraFuzzy(const DijkstraFuzzy& other);
     virtual ~DijkstraFuzzy();
     virtual void setFromTopo(const cTopology *);
-    virtual bool getHasFindDisjoint() const {return hasFindDisjoint;}
+    virtual bool getHasFindDisjoint() const {return (hasFindDisjoint);}
     virtual void setHasFindDisjoint(const bool &p) {hasFindDisjoint = p; if (!hasFindDisjoint) partitionLinks.clear();}
     virtual void initMinAndMax();
     virtual void cleanLinkArray();
@@ -372,16 +373,16 @@ inline bool operator ==(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::Se
 inline bool operator >(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y)
 {
     if (x.iD == y.iD)
-        return false;
-    return x.cost > y.cost;
+        return (false);
+    return (x.cost > y.cost);
 }
 
 inline bool operator <(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::FuzzyCost& y)
 {
     if (x.exp() < y.exp()) {
-        return true;
+        return (true);
     }
-    return false;
+    return (false);
 }
 
 inline bool operator ==(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::FuzzyCost& y)

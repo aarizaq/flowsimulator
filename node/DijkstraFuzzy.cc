@@ -19,7 +19,7 @@
 
 DijkstraFuzzy::FuzzyCost DijkstraFuzzy::minimumCost;
 DijkstraFuzzy::FuzzyCost DijkstraFuzzy::maximumCost;
-double DijkstraFuzzy::alpha = 0.5;
+double DijkstraFuzzy::alpha = 0.55;
 
 DijkstraFuzzy::State::State()
 {
@@ -623,12 +623,12 @@ void DijkstraFuzzy::runDisjoint(const NodeId &target)
 bool DijkstraFuzzy::checkDisjoint(const NodeId &nodeId, Route & r1, Route &r2) {
     auto it = kRoutesMap.find(nodeId);
     if (it == kRoutesMap.end())
-        return false;
+        return (false);
 
     r1 = it->second[0];
     r2 = it->second[1];
 
-    return true;
+    return (true);
 }
 
 int DijkstraFuzzy::getNumRoutes(const NodeId &nodeId)
@@ -636,13 +636,13 @@ int DijkstraFuzzy::getNumRoutes(const NodeId &nodeId)
     RouteMap::iterator it;
     it = routeMap.find(nodeId);
     if (it == routeMap.end())
-        return -1;
-    return 1;
+        return (-1);
+    return (1);
 }
 
 bool DijkstraFuzzy::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, FuzzyCost &cost)
 {
-    return getRoute(nodeId, pathNode, routeMap, cost);
+    return (getRoute(nodeId, pathNode, routeMap, cost));
 }
 
 bool DijkstraFuzzy::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, const RouteMap &routeMap,
@@ -650,7 +650,7 @@ bool DijkstraFuzzy::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode
 {
     auto it = routeMap.find(nodeId);
     if (it == routeMap.end())
-        return false;
+        return (false);
 
     std::vector<NodeId> path;
     NodeId currentNode = nodeId;
@@ -669,7 +669,7 @@ bool DijkstraFuzzy::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode
         pathNode.push_back(path.back());
         path.pop_back();
     }
-    return true;
+    return (true);
 }
 
 void DijkstraFuzzy::setFromTopo(const cTopology *topo)
@@ -744,10 +744,10 @@ NodeId findnext(const NodeId &v_ref, const DijkstraFuzzy::Route &path, const Dij
     for (; itAux < path.end(); ++itAux) {
         for (auto &elem : it->second) {
             if (elem->last_node() == *itAux)
-                return elem->last_node();
+                return (elem->last_node());
         }
     }
-    return -1;
+    return (-1);
 }
 
 // CONSTRUYENDO GAMMA_1
@@ -868,6 +868,8 @@ void DijkstraFuzzy::buildGamma1(Route& nextV_S, Route& nextV_Sp, const Route &Sp
                     if (vertice != -1)
                         v_ref = vertice;
                 }
+                else
+                    throw cRuntimeError("Vectice no encontrado");
             }
             gamma.push_back(v_ref);
         }
@@ -970,7 +972,6 @@ void DijkstraFuzzy::buildGamma2(Route& nextV_S, Route& nextV_Sp, const Route &Sp
                         if (itAux != nextV_Sp.end())
                             nextV_Sp.erase(itAux);
                     }
-
                 }
             }
             else if (candidates.empty()) {
@@ -1053,11 +1054,13 @@ void DijkstraFuzzy::Pair_Paths(const Route &S, const Route &Sp, BreaksVect &Vect
 // Eliminar los segundos vertices de todos los breaks en S y Sp
     for (unsigned int i = 0; i < remv_S.size(); i++) {
         auto it = std::find(sprima.begin(), sprima.end(), remv_S[i]);
-        sprima.erase(it);
+        if (it != sprima.end())
+            sprima.erase(it);
     }
     for (unsigned int i = 0; i < remv_Sp.size(); i++) {
         auto it = std::find(spprima.begin(), spprima.end(), remv_Sp[i]);
-        spprima.erase(it);
+        if (it != spprima.end())
+            spprima.erase(it);
     }
 
     buildGamma1(nextV_S, nextV_Sp, sprima, spprima, Vect_breaks, A, s, t, gamma1);
@@ -1094,7 +1097,7 @@ Dijkstra::State::~State()
 
 Dijkstra::Dijkstra()
 {
-
+    rootNode = -1;
 }
 
 void Dijkstra::cleanLinkArray()
@@ -1174,11 +1177,11 @@ Dijkstra::Edge * Dijkstra::removeEdge(const NodeId & originNode, const NodeId & 
             if (last_node == edge->last_node_) {
                 it->second.erase(itAux);
                 routeMap.clear();
-                return edge;
+                return (edge);
             }
         }
     }
-    return nullptr;
+    return (nullptr);
 }
 
 void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost,  double cost2)
@@ -1314,7 +1317,7 @@ bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, con
 {
     auto it = routeMap.find(nodeId);
     if (it == routeMap.end())
-        return false;
+        return (false);
     std::vector<NodeId> path;
     NodeId currentNode = nodeId;
 
@@ -1330,13 +1333,13 @@ bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, con
         pathNode.push_back(path.back());
         path.pop_back();
     }
-    return true;
+    return (true);
 
 }
 
 bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode)
 {
-    return getRoute(nodeId, pathNode, routeMap);
+    return (getRoute(nodeId, pathNode, routeMap));
 }
 
 void Dijkstra::setFromTopo(const cTopology *topo)
@@ -1457,10 +1460,10 @@ bool DijkstraFuzzy::getCostPath(const Route &route, const LinkArray &linkArray, 
             }
         }
         if (e == nullptr)
-            return false;
+            return (false);
         costAux = costAux + e->cost;
     }
     cost = costAux;
-    return true;
+    return (true);
 
 }

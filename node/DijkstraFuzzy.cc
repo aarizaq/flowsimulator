@@ -1105,6 +1105,12 @@ void Dijkstra::cleanLinkArray()
     cleanLinkArray(linkArray);
 }
 
+void Dijkstra::clearAll()
+{
+    cleanLinkArray();
+    routeMap.clear();
+}
+
 void Dijkstra::cleanLinkArray(LinkArray &linkArray)
 {
     for (auto it = linkArray.begin(); it != linkArray.end(); it++)
@@ -1129,6 +1135,7 @@ void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, doub
                 // check changes in the cost
                 if (it->second[i]->Cost() != cost) {
                     it->second[i]->Cost() = cost;
+                    it->second[i]->Cost2() = cost2;
                     // delete routing stored information
                     routeMap.clear();
                 }
@@ -1149,6 +1156,7 @@ void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, doub
 void Dijkstra::addEdge(const NodeId & originNode, Edge * edge, LinkArray & linkArray)
 {
     auto it = linkArray.find(originNode);
+    routeMap.clear();
     if (it != linkArray.end()) {
         for (unsigned int i = 0; i < it->second.size(); i++) {
             if (edge->last_node() == it->second[i]->last_node_) {

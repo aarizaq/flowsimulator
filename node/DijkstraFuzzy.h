@@ -168,6 +168,8 @@ public:
     virtual Edge* removeEdge(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray);
 
     virtual void cleanLinkArray();
+    virtual void clearAll();
+    virtual void cleanRoutes() {routeMap.clear();}
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, double cost2);
     virtual void addEdge(const NodeId & dest_node, Edge *);
     virtual void deleteEdge(const NodeId &, const NodeId &);

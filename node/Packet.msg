@@ -22,6 +22,7 @@ struct LinkData
     double mean;
     double min;
     double max;
+    double actual;
 }
 
 enum PacketCode

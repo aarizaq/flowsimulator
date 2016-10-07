@@ -230,6 +230,7 @@ bool FlowRouting::actualize(Actualize *other)
         if (portDataArray[elem.second.port].portStatus == UP) {
             auxdata.residual = portDataArray[elem.second.port].occupation;
             auxdata.nominal = portDataArray[elem.second.port].nominalbw;
+            auxdata.actual = portDataArray[elem.second.port].flowOcupation;
             if (simTime() == simtime_t::ZERO)
             {
                 auxdata.max = portDataArray[elem.second.port].occupation;

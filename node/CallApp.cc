@@ -842,13 +842,7 @@ void CallApp::release(Packet *pk) {
 
             // if active flows send end
             if (callInfo->state == ON) {
-                for (auto it = CallEvents.begin(); it != CallEvents.end();) {
-                    if (it->second->callId == callInfo->callId)
-                        CallEvents.erase(it++);
-                    else
-                        ++it;
-                }
-                bytesTraceSend(callInfo);
+                 bytesTraceSend(callInfo);
                 callInfo->acumulateSend += ((callInfo->usedBandwith
                         * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
                 // send off in the o
@@ -864,10 +858,7 @@ void CallApp::release(Packet *pk) {
                 char pkname[60];
                 sprintf(pkname,"FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
                 pkFlow->setName(pkname);
-                if (pkFlow->getDestAddr() == myAddress)
-                    throw cRuntimeError("Destination address erroneous");
-
-                CallEvents.insert(std::make_pair(simTime(), callInfo)); // continue sending but now in the new path
+                CallEvents.insert(std::make_pair(simTime() + TimeOff->doubleValue(), callInfo));
                 send(pkFlow, "out");
             }
             // if active flows send end

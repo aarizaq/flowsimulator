@@ -19,7 +19,7 @@ simple CallApp like IApp
         string destAddresses = default("");  // destination addresses
         int sourceId = default(0);
         int destinationId = default(0);
-        string RoutingType @enum("HopByHop","SourceRouting","Disjoint","BackupRouting") = default("HopByHop");
+        string RoutingType @enum("HopByHop","SourceRouting","Disjoint","BackupRouting,SourceRoutingFuzzy") = default("HopByHop");
         volatile double callArrival @unit(s) = default(exponential(20s)); // time between generating packets
         volatile double callDuration @unit(s) = default(exponential(60s)); // time between generating packets
         volatile double callReserve @unit(bps) = default(0bps);  //

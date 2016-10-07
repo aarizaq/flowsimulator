@@ -26,6 +26,7 @@ protected:
     enum RoutingType {
         HOPBYHOP,
         SOURCEROUTING,
+        SOURCEROUTINGNORMAL,
         DISJOINT,
         BACKUPROUTE
      };
@@ -120,6 +121,7 @@ private:
     std::multimap<simtime_t, CallInfo*> CallEvents;
     std::multimap<simtime_t, FlowEvent*> FlowEvents;
     DijkstraFuzzy *dijFuzzy = nullptr;
+    Dijkstra *dijkstra = nullptr;
     SequenceTable sequenceTable;
 
     std::map<int, long double> receivedBytes;
@@ -134,6 +136,7 @@ private:
     bool trace = false;
     void bytesTraceSend(const CallInfo *callInfo);
     void bytesTraceRec(const CallInfo *callInfo);
+    void storeCallStatistics(const CallInfo *callInfo);
     static simsignal_t actualizationSignal;
 public:
     CallApp();

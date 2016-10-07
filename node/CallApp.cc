@@ -29,6 +29,8 @@ CallApp::~CallApp()
 {
     if (dijFuzzy)
         delete dijFuzzy;
+    if (dijkstra)
+        delete dijkstra;
     if (generateCall)
         cancelAndDelete(generateCall);
     if (nextEvent)
@@ -81,7 +83,14 @@ void CallApp::readTopo()
     else
         dijFuzzy->clearAll();
 
+    if (dijkstra == nullptr) {
+        dijkstra = new Dijkstra();
+      }
+      else
+          dijkstra->clearAll();
+
     dijFuzzy->setRoot(getParentModule()->par("address"));
+    dijkstra->setRoot(getParentModule()->par("address"));
 
     std::vector<std::string> nedTypes;
     nedTypes.push_back(getParentModule()->getNedTypeName());
@@ -146,6 +155,7 @@ void CallApp::readTopo()
      test.runDisjoint(7);
      */
     Dijkstra dj;
+
     for (int i = 0; i < topo.getNumNodes(); i++) {
         cTopology::Node *node = topo.getNode(i);
         int address = node->getModule()->par("address");
@@ -179,6 +189,7 @@ void CallApp::readTopo()
                 maxResidual = 1;
             }
             dijFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
+            dijkstra->addEdge(address, addressAux, minResidual,1);
             dj.addEdge(address, addressAux, 1, 10000);
         }
     }
@@ -447,6 +458,19 @@ void CallApp::newCall() {
             dijFuzzy->run();
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (dijFuzzy->getRoute(destAddress, min, cost)) {
+            pk->setRouteArraySize(min.size());
+            for (unsigned int i = 0; i < min.size(); i++) {
+                pk->setRoute(i, min[i]);
+            }
+        }
+    }
+    else if (rType == SOURCEROUTINGNORMAL) {
+        Dijkstra::Route min;
+        dijkstra->setRoot(getParentModule()->par("address"));
+        if (!dijkstra->getRoute(destAddress, min))
+            dijFuzzy->run();
+        //dijFuzzy->getRoute(destAddress, min, cost);
+        if (dijkstra->getRoute(destAddress, min)) {
             pk->setRouteArraySize(min.size());
             for (unsigned int i = 0; i < min.size(); i++) {
                 pk->setRoute(i, min[i]);
@@ -726,13 +750,47 @@ void CallApp::newAccepted(Packet *pk) {
     }
 }
 
+void CallApp::storeCallStatistics(const CallInfo *callInfo) {
+
+    if (callInfo->state == ON) {
+        bytesTraceSend (callInfo);
+        double bsend = callInfo->usedBandwith
+                * SIMTIME_DBL(simTime() - callInfo->startOn);
+        const_cast<CallInfo *>(callInfo)->acumulateSend += ((bsend) / 1000.0);
+    }
+
+    if (callInfo->stateRec == ON) {
+        bytesTraceRec (callInfo);
+        double brec = callInfo->recBandwith
+                * SIMTIME_DBL(simTime() - callInfo->startOnRec);
+        const_cast<CallInfo *>(callInfo)->acumulateRec += (brec / 1000.0);
+    }
+
+// record the statistics
+    auto itAccSend = sendBytes.find(callInfo->dest);
+    auto itAccRec = receivedBytes.find(callInfo->dest);
+
+    if (itAccSend == sendBytes.end())
+        sendBytes[callInfo->dest] = callInfo->acumulateSend;
+    else
+        itAccSend->second += callInfo->acumulateSend;
+
+    if (itAccRec == receivedBytes.end())
+        receivedBytes[callInfo->dest] = callInfo->acumulateRec;
+    else
+        itAccRec->second += callInfo->acumulateRec;
+}
+
 void CallApp::release(Packet *pk) {
 
     // Handle incoming packet
+
     auto it = activeCalls.find(pk->getCallId());
     auto it2 = backupCalls.find(pk->getCallId());
+
+
     if (it == activeCalls.end() && it2 == backupCalls.end()) {
-        if (!pk->isSelfMessage()) // si se ha libreador por rotura debería haber llegado a la otra parte el relese con lo cual no debe mandar el mensaje de release otra vez
+        if (!pk->isSelfMessage()) // si se ha liberador por rotura debería haber llegado a la otra parte el relese con lo cual no debe mandar el mensaje de release otra vez
             throw cRuntimeError("Call Id not found in any list");
         else {
             if (pk->getCallIdBk() == 0) {
@@ -765,7 +823,7 @@ void CallApp::release(Packet *pk) {
             send(pkt, "out");
             it->second->callIdBk = 0;
         }
-        // record statistics
+        // delete all events relative to this call
         CallInfo *callInfo = it->second;
         for (auto it = CallEvents.begin(); it != CallEvents.end();) {
             if (it->second->callId == pk->getCallId())
@@ -774,39 +832,50 @@ void CallApp::release(Packet *pk) {
                 ++it;
         }
 
-       // Accumulate the flows in curse
-        if (callInfo->state == ON) {
-            bytesTraceSend(callInfo);
-            double bsend = callInfo->usedBandwith
-                    * SIMTIME_DBL(simTime() - callInfo->startOn);
-            callInfo->acumulateSend += ((bsend) / 1000.0);
-        }
-
-        if (callInfo->stateRec == ON) {
-            bytesTraceRec(callInfo);
-            double brec = callInfo->recBandwith
-                    * SIMTIME_DBL(simTime() - callInfo->startOnRec);
-            callInfo->acumulateRec += (brec / 1000.0);
-        }
-
-        // record the statistics
-        auto itAccSend = sendBytes.find(callInfo->dest);
-        auto itAccRec = receivedBytes.find(callInfo->dest);
-
-        if (itAccSend == sendBytes.end())
-            sendBytes[it->second->dest] = callInfo->acumulateSend;
-        else
-            itAccSend->second += callInfo->acumulateSend;
-
-        if (itAccRec == receivedBytes.end())
-            receivedBytes[callInfo->dest] = callInfo->acumulateRec;
-        else
-            itAccRec->second += callInfo->acumulateRec;
-
         if (callInfo->callIdBk != 0) // change to backup route
         {
             auto itAux =  backupCalls.find(it->second->callIdBk);
-            backupCalls.erase(itAux);
+            if (itAux != backupCalls.end())
+                backupCalls.erase(itAux);
+            else
+                throw cRuntimeError("Check bk table");
+
+            // if active flows send end
+            if (callInfo->state == ON) {
+                for (auto it = CallEvents.begin(); it != CallEvents.end();) {
+                    if (it->second->callId == callInfo->callId)
+                        CallEvents.erase(it++);
+                    else
+                        ++it;
+                }
+                bytesTraceSend(callInfo);
+                callInfo->acumulateSend += ((callInfo->usedBandwith
+                        * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
+                // send off in the o
+                callInfo->state = OFF;
+                Packet *pkFlow = new Packet();
+                pkFlow->setDestAddr(callInfo->dest);
+                pkFlow->setCallId(callInfo->callId);
+                pkFlow->setSourceId(par("sourceId").longValue());
+                pkFlow->setDestinationId(callInfo->sourceId);
+                pkFlow->setType(ENDFLOW);
+                pkFlow->setFlowId(callInfo->flowId);
+                pkFlow->setReserve(callInfo->usedBandwith);
+                char pkname[60];
+                sprintf(pkname,"FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
+                pkFlow->setName(pkname);
+                if (pkFlow->getDestAddr() == myAddress)
+                    throw cRuntimeError("Destination address erroneous");
+                send(pkFlow, "out");
+            }
+            // if active flows send end
+            if (callInfo->stateRec == ON) {
+                bytesTraceRec(callInfo);
+                callInfo->acumulateRec += ((callInfo->recBandwith
+                        * SIMTIME_DBL(simTime() - callInfo->startOnRec))/1000);
+                // send off in the o
+                callInfo->stateRec = OFF;
+            }
             // change all to backup
             activeCalls.erase(it);
             uint64_t callidBk = callInfo->callIdBk;
@@ -815,10 +884,10 @@ void CallApp::release(Packet *pk) {
             if (callInfo->dest == myAddress)
                 throw cRuntimeError("Address destination Error");
             activeCalls.insert(std::make_pair(callInfo->callId,callInfo));
-            callInfo->state = OFF;
-            CallEvents.insert(std::make_pair(simTime()+TimeOff->doubleValue(),callInfo));
         }
         else {
+            // Accumulate the flows in curse
+            storeCallStatistics(callInfo);
             delete callInfo;
             activeCalls.erase(it);
         }
@@ -901,8 +970,40 @@ void CallApp::procFlowPk(Packet *pk) {
                 itAux = backupCalls.find(flowId.callId());
                 if (itAux == backupCalls.end())
                     throw cRuntimeError("Call Id not found in any list %i",flowId.callId());
+
                 // change to backup route
                 callInfo = itAux->second;
+                // if there is a active flow stop it and change to the other
+                /*if (callInfo->state == ON) {
+
+                    for (auto it = CallEvents.begin(); it != CallEvents.end();) {
+                        if (it->second->callId == callInfo->callId)
+                            CallEvents.erase(it++);
+                        else
+                            ++it;
+                    }
+                    bytesTraceSend(callInfo);
+                    callInfo->acumulateSend += ((callInfo->recBandwith
+                            * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
+                    // send off in the o
+                    callInfo->state = OFF;
+                    Packet *pkFlow = new Packet();
+                    pkFlow->setDestAddr(callInfo->dest);
+                    pkFlow->setCallId(callInfo->callId);
+                    pkFlow->setSourceId(par("sourceId").longValue());
+                    pkFlow->setDestinationId(callInfo->sourceId);
+                    pkFlow->setType(ENDFLOW);
+                    pkFlow->setFlowId(callInfo->flowId);
+                    pkFlow->setReserve(callInfo->usedBandwith);
+                    char pkname[60];
+                    sprintf(pkname,"FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
+                    pkFlow->setName(pkname);
+                    if (pkFlow->getDestAddr() == myAddress)
+                        throw cRuntimeError("Destination address erroneous");
+                    send(pkFlow, "out");
+                    CallEvents.insert(std::make_pair(simTime()+TimeOff->doubleValue(), callInfo));
+                }*/
+
                 uint64_t callId = callInfo->callId;
                 uint64_t calIdbk = callInfo->callIdBk;
                 callInfo->callId = calIdbk;
@@ -930,7 +1031,7 @@ void CallApp::procFlowPk(Packet *pk) {
                             ++it;
                     }
                     bytesTraceSend(callInfo);
-                    callInfo->acumulateSend += ((callInfo->recBandwith
+                    callInfo->acumulateSend += ((callInfo->usedBandwith
                             * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
                     // send off in the o
                     callInfo->state = OFF;
@@ -1053,12 +1154,15 @@ void CallApp::initialize()
     }
     if (strcmp(par("RoutingType").stringValue(),"HopByHop") ==0)
         rType = HOPBYHOP;
-    else if (strcmp(par("RoutingType").stringValue(),"SourceRouting") ==0)
+    else if (strcmp(par("RoutingType").stringValue(),"SourceRoutingFuzzy") ==0)
         rType = SOURCEROUTING;
     else if (strcmp(par("RoutingType").stringValue(),"Disjoint") ==0)
         rType = DISJOINT;
     else if (strcmp(par("RoutingType").stringValue(),"BackupRouting") ==0)
         rType = BACKUPROUTE;
+    else if (strcmp(par("RoutingType").stringValue(),"SourceRouting") ==0)
+        rType = SOURCEROUTINGNORMAL;
+
 
     nextEvent = new cMessage("NewEvent");
     readTopo();
@@ -1208,6 +1312,7 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
             double minResidual = linkData.nominal-linkData.min;
             double meanResidual = linkData.nominal-linkData.mean;
             double maxResidual = linkData.nominal-linkData.max;
+            double instResidual = linkData.nominal-linkData.actual;
 
             if (residual) {
                 if (minResidual < 0.0001)
@@ -1231,11 +1336,14 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
                 minResidual =  (linkData.min/linkData.nominal);
                 meanResidual = (linkData.mean/linkData.nominal);
                 maxResidual = (linkData.max/linkData.nominal);
+                instResidual =  linkData.actual/linkData.nominal;
+
             }
 
             if (minResidual == 0)
                 throw cRuntimeError("Problems detected");
             dijFuzzy->addEdge(nodeId,linkData.node,minResidual, meanResidual, maxResidual);
+            dijkstra->addEdge(nodeId,linkData.node, instResidual,1);
         }
     }
 }

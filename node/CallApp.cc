@@ -866,6 +866,8 @@ void CallApp::release(Packet *pk) {
                 pkFlow->setName(pkname);
                 if (pkFlow->getDestAddr() == myAddress)
                     throw cRuntimeError("Destination address erroneous");
+
+                CallEvents.insert(std::make_pair(simTime(), callInfo)); // continue sending but now in the new path
                 send(pkFlow, "out");
             }
             // if active flows send end

@@ -1336,6 +1336,7 @@ bool Dijkstra::getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, con
         if (it == routeMap.end())
             throw cRuntimeError("error in data");
     }
+    path.push_back(rootNode);
     pathNode.clear();
     while (!path.empty()) {
         pathNode.push_back(path.back());

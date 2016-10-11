@@ -20,7 +20,7 @@ package node;
 //
 simple FailureModule
 {
-    xml config = default(xml("</config>"));
+    xml config = default(xml("<config></config>"));
     @display("i=block/control");
     @signal[EventSignal];
 }

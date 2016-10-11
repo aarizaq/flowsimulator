@@ -1012,6 +1012,7 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
     if (rejected) {
         // reject call
         Packet *pkt = pk->dup();
+        callLost++;
         pkt->setType(REJECTED);
 
         pkt->setSrcAddr(pk->getDestAddr());
@@ -1978,3 +1979,10 @@ void FlowRouting::receiveSignal(cComponent *source, simsignal_t signalID, cObjec
 
     }
 }
+
+void FlowRouting::finish()
+{
+    recordScalar("Total calls rejected",callLost);
+    //recordScalar("Total calls received",callReceived);
+}
+

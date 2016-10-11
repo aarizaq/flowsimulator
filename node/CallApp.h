@@ -59,6 +59,7 @@ private:
     long callCounter = 0; // number of call generated
     long callEstabilized  = 0; // number of call stabilized
     long callReceived = 0;
+    long callRejected = 0;
 
 
     enum State
@@ -128,6 +129,7 @@ private:
     std::map<int, long double> sendBytes;
     std::map<uint64_t, CallInfo*> activeCalls;
     std::map<uint64_t, CallInfo*> backupCalls;
+    std::list<Packet *> listPendingRelease;
 
     bool check = false;
 

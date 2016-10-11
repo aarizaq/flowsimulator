@@ -433,7 +433,7 @@ void CallApp::newCall() {
 
     if (rType == DISJOINT) {
         DijkstraFuzzy::Route r1, r2, min;
-        dijFuzzy->setRoot(getParentModule()->par("address"));
+        dijFuzzy->setRoot(myAddress);
         dijFuzzy->runDisjoint(destAddress);
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
@@ -453,7 +453,7 @@ void CallApp::newCall() {
     else if (rType == SOURCEROUTING) {
         DijkstraFuzzy::Route min;
         DijkstraFuzzy::FuzzyCost cost;
-        dijFuzzy->setRoot(getParentModule()->par("address"));
+        dijFuzzy->setRoot(myAddress);
         if (!dijFuzzy->getRoute(destAddress, min, cost))
             dijFuzzy->run();
         //dijFuzzy->getRoute(destAddress, min, cost);
@@ -466,9 +466,9 @@ void CallApp::newCall() {
     }
     else if (rType == SOURCEROUTINGNORMAL) {
         Dijkstra::Route min;
-        dijkstra->setRoot(getParentModule()->par("address"));
+        dijkstra->setRoot(myAddress);
         if (!dijkstra->getRoute(destAddress, min))
-            dijFuzzy->run();
+            dijkstra->run();
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (dijkstra->getRoute(destAddress, min)) {
             pk->setRouteArraySize(min.size());
@@ -480,7 +480,7 @@ void CallApp::newCall() {
     else if (rType == BACKUPROUTE) {
         // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
         DijkstraFuzzy::Route r1, r2, min;
-        dijFuzzy->setRoot(getParentModule()->par("address"));
+        dijFuzzy->setRoot(myAddress);
         dijFuzzy->runDisjoint(destAddress);
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (dijFuzzy->checkDisjoint(destAddress, r1, r2)) {
@@ -743,6 +743,8 @@ void CallApp::newAccepted(Packet *pk) {
                 pk->getDestAddr(), pk->getCallId(), this->getIndex());
         pk->setName(pkname);
         scheduleAt(simTime() + callDuration->doubleValue(), pk);
+        listPendingRelease.push_back(pk);
+
     }
     else
     {
@@ -788,6 +790,15 @@ void CallApp::release(Packet *pk) {
     auto it = activeCalls.find(pk->getCallId());
     auto it2 = backupCalls.find(pk->getCallId());
 
+    if (pk->isSelfMessage()) {
+        // search in the list
+        auto itPendingRelease = std::find(listPendingRelease.begin(),listPendingRelease.end(),pk);
+        if (itPendingRelease == listPendingRelease.end()) {
+            throw cRuntimeError("Packet not found in the pending release");
+        }
+        else
+            listPendingRelease.erase(itPendingRelease);
+    }
 
     if (it == activeCalls.end() && it2 == backupCalls.end()) {
         if (!pk->isSelfMessage()) // si se ha liberador por rotura debería haber llegado a la otra parte el relese con lo cual no debe mandar el mensaje de release otra vez
@@ -799,11 +810,13 @@ void CallApp::release(Packet *pk) {
             }
             auto it = activeCalls.find(pk->getCallIdBk());
             if (it == activeCalls.end()) {
+                callRejected++;
                 delete pk;
                 return;
             }
             else {
              // El backup pasó a principal, se debe eliminar ahora el backup
+                throw cRuntimeError("Call Id not found in any list");
                 pk->setCallId(pk->getCallIdBk());
                 pk->setCallIdBk(0);
             }
@@ -834,6 +847,13 @@ void CallApp::release(Packet *pk) {
 
         if (callInfo->callIdBk != 0) // change to backup route
         {
+            for (auto & elem : listPendingRelease) {
+                if (elem->getCallId() == callInfo->callId) {
+                    elem->setCallId(callInfo->callIdBk);
+                    break;
+                }
+            }
+
             auto itAux =  backupCalls.find(it->second->callIdBk);
             if (itAux != backupCalls.end())
                 backupCalls.erase(itAux);
@@ -1236,6 +1256,13 @@ void CallApp::handleMessage(cMessage *msg)
     else if (pk->getType() == BREAK) {
 
     }
+    else if (pk->getType() == REJECTED) {
+        callRejected++;
+        auto it = activeCalls.find(pk->getCallId());
+        if (it != activeCalls.end())
+            throw cRuntimeError("This call must not be registered");
+        delete pk;
+    }
     else // flow control packets, can be used to compute the statistics
     {
         procFlowPk(pk);
@@ -1284,6 +1311,9 @@ void CallApp::finish()
     recordScalar("Total calls generated",callCounter);
     recordScalar("Total calls established",callEstabilized);
     recordScalar("Total calls received",callReceived);
+
+    recordScalar("Total calls callRejected",callRejected);
+
 }
 
 void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
@@ -1299,8 +1329,10 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
     int nodeId = pkt->getSrcAddr();
     for (unsigned int i = 0; i < pkt->getLinkDataArraySize(); i++) {
         LinkData linkData = pkt->getLinkData(i);
-        if (linkData.nominal == 0)
+        if (linkData.nominal == 0) {
             dijFuzzy->deleteEdge(nodeId,linkData.node);
+            dijkstra->deleteEdge(nodeId,linkData.node);
+        }
         else {
             double minResidual = linkData.nominal-linkData.min;
             double meanResidual = linkData.nominal-linkData.mean;

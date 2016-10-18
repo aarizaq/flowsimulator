@@ -477,6 +477,34 @@ void CallApp::newCall() {
             }
         }
     }
+    else if (rType == SW) {
+        Dijkstra::Route min;
+        dijkstra->setRoot(myAddress);
+        dijkstra->setMethod(Dijkstra::Method::shortestwidest);
+        if (!dijkstra->getRoute(destAddress, min))
+            dijkstra->run();
+        //dijFuzzy->getRoute(destAddress, min, cost);
+        if (dijkstra->getRoute(destAddress, min)) {
+            pk->setRouteArraySize(min.size());
+            for (unsigned int i = 0; i < min.size(); i++) {
+                pk->setRoute(i, min[i]);
+            }
+        }
+    }
+    else if (rType == WS) {
+        Dijkstra::Route min;
+        dijkstra->setRoot(myAddress);
+        dijkstra->setMethod(Dijkstra::Method::widestshortest);
+        if (!dijkstra->getRoute(destAddress, min))
+            dijkstra->run();
+        //dijFuzzy->getRoute(destAddress, min, cost);
+        if (dijkstra->getRoute(destAddress, min)) {
+            pk->setRouteArraySize(min.size());
+            for (unsigned int i = 0; i < min.size(); i++) {
+                pk->setRoute(i, min[i]);
+            }
+        }
+    }
     else if (rType == BACKUPROUTE) {
         // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
         DijkstraFuzzy::Route r1, r2, min;
@@ -1139,6 +1167,8 @@ void CallApp::initialize()
     flowDuration = &par("flowDuration");
     flowUsedBandwith = &par("flowUsedBandwith");
 
+    residual = par("useHyperbolic").boolValue();
+
     callCounter = 0;
 
     WATCH(callCounter);
@@ -1175,6 +1205,12 @@ void CallApp::initialize()
         rType = BACKUPROUTE;
     else if (strcmp(par("RoutingType").stringValue(),"SourceRouting") ==0)
         rType = SOURCEROUTINGNORMAL;
+    else if (strcmp(par("RoutingType").stringValue(),"SW") ==0)
+        rType = SW;
+    else if (strcmp(par("RoutingType").stringValue(),"WS") ==0)
+        rType = WS;
+    else
+        throw cRuntimeError("Routing type unknown");
 
 
     nextEvent = new cMessage("NewEvent");
@@ -1340,18 +1376,18 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
             double instResidual = linkData.nominal-linkData.actual;
 
             if (residual) {
-                if (minResidual < 0.0001)
-                    minResidual = 1/0.0001;
+                if (minResidual < 1e30)
+                    minResidual = 1/1e30;
                 else
                     minResidual = 1/minResidual;
 
-                if (meanResidual < 0.0001)
-                    meanResidual = 1/0.0001;
+                if (meanResidual < 1e30)
+                    meanResidual = 1/1e30;
                 else
                     meanResidual = 1/meanResidual;
 
-                if (maxResidual < 0.0001)
-                    maxResidual = 1/0.0001;
+                if (maxResidual < 1e30)
+                    maxResidual = 1/1e30;
                 else
                     maxResidual = 1/maxResidual;
             }
@@ -1368,7 +1404,19 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
             if (minResidual == 0)
                 throw cRuntimeError("Problems detected");
             dijFuzzy->addEdge(nodeId,linkData.node,minResidual, meanResidual, maxResidual);
-            dijkstra->addEdge(nodeId,linkData.node, instResidual,1);
+            if (par("instValue").boolValue()) {
+                if (rType == SW || rType == WS)
+                    dijkstra->addEdge(nodeId,linkData.node, 1,linkData.nominal-linkData.actual);
+                else
+                    dijkstra->addEdge(nodeId,linkData.node, instResidual,1);
+            }
+            else {
+                if (rType == SW || rType == WS)
+                    dijkstra->addEdge(nodeId,linkData.node, meanResidual,linkData.nominal-linkData.mean);
+                else
+                    dijkstra->addEdge(nodeId,linkData.node, meanResidual,1);
+
+            }
         }
     }
 }

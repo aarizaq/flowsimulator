@@ -28,7 +28,9 @@ protected:
         SOURCEROUTING,
         SOURCEROUTINGNORMAL,
         DISJOINT,
-        BACKUPROUTE
+        BACKUPROUTE,
+        SW,
+        WS
      };
     RoutingType rType;
 private:

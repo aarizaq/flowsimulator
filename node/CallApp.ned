@@ -15,11 +15,12 @@ package node;
 simple CallApp like IApp
 {
     parameters:
+        bool useHyperbolic = default(false);// use lineal or hyperbolic
         int address;  // local node address
         string destAddresses = default("");  // destination addresses
         int sourceId = default(0);
         int destinationId = default(0);
-        string RoutingType @enum("HopByHop","SourceRouting","Disjoint","BackupRouting,SourceRoutingFuzzy") = default("HopByHop");
+        string RoutingType @enum("HopByHop","SourceRouting","Disjoint","BackupRouting,SourceRoutingFuzzy,Sw,Ws") = default("HopByHop");
         volatile double callArrival @unit(s) = default(exponential(20s)); // time between generating packets
         volatile double callDuration @unit(s) = default(exponential(60s)); // time between generating packets
         volatile double callReserve @unit(bps) = default(0bps);  //
@@ -35,6 +36,9 @@ simple CallApp like IApp
         volatile double flowArrival @unit(s) = default(exponential(1s));
         volatile double flowDuration @unit(s) = default(exponential(1s));
         volatile double flowUsedBandwith @unit(bps);  //
+        
+        
+        bool instValue = default(false);
         
          
          

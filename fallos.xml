@@ -1,0 +1,11 @@
+<config>
+	<eventsnode node = "7" remotenode = "12"  basetime = "0" repeat ="10">
+		<action type="FAILURE" start = "1000"/>
+		<action type="RECOVERY" start = "300"/>
+	</eventsnode>
+
+	<eventsnode node = "12" remotenode = "7" basetime = "0" repeat ="10">
+		<action type="FAILURE" start = "1000"/>
+		<action type="RECOVERY" start = "300"/>
+	</eventsnode>
+</config>

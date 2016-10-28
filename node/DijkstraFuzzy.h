@@ -216,9 +216,11 @@ class DijkstraFuzzy
 public:
     struct FuzzyCost
     {
-        double cost1;
-        double cost2;
-        double cost3;
+        double cost1 = 0;
+        double cost2 = 0;
+        double cost3 = 0;
+        FuzzyCost() {}
+        FuzzyCost(const double &c1,const double &c2,const double &c3) {cost1 = c1;cost2 = c2;cost3 = c3;}
         FuzzyCost& operator+=(const FuzzyCost& rhs)
         {
             this->cost1 += rhs.cost1;

@@ -30,7 +30,9 @@ protected:
         DISJOINT,
         BACKUPROUTE,
         SW,
-        WS
+        WS,
+        SWFUZZY,
+        WSFUZZY
      };
     RoutingType rType;
 private:
@@ -135,6 +137,9 @@ private:
 
     bool check = false;
 
+    std::vector<double> percentajesValues;
+    std::vector<double> sanctionValues;
+
     static bool residual;
 private:
     bool trace = false;
@@ -159,6 +164,7 @@ protected:
     virtual void newAccepted(Packet *);
     virtual void release(Packet *);
     virtual void procFlowPk(Packet *);
+    virtual void procActualize(Actualize *);
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;

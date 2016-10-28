@@ -477,7 +477,7 @@ void CallApp::newCall() {
             }
         }
     }
-    else if (rType == SW) {
+    else if (rType == SW || rType == SWFUZZY) {
         Dijkstra::Route min;
         dijkstra->setRoot(myAddress);
         dijkstra->setMethod(Dijkstra::Method::shortestwidest);
@@ -491,7 +491,7 @@ void CallApp::newCall() {
             }
         }
     }
-    else if (rType == WS) {
+    else if (rType == WS || rType == WSFUZZY) {
         Dijkstra::Route min;
         dijkstra->setRoot(myAddress);
         dijkstra->setMethod(Dijkstra::Method::widestshortest);
@@ -1205,12 +1205,37 @@ void CallApp::initialize()
         rType = BACKUPROUTE;
     else if (strcmp(par("RoutingType").stringValue(),"SourceRouting") ==0)
         rType = SOURCEROUTINGNORMAL;
-    else if (strcmp(par("RoutingType").stringValue(),"SW") ==0)
+    else if (strcmp(par("RoutingType").stringValue(),"Sw") ==0)
         rType = SW;
-    else if (strcmp(par("RoutingType").stringValue(),"WS") ==0)
+    else if (strcmp(par("RoutingType").stringValue(),"Ws") ==0)
         rType = WS;
+    else if (strcmp(par("RoutingType").stringValue(),"SwFuzzy") ==0)
+        rType = SWFUZZY;
+    else if (strcmp(par("RoutingType").stringValue(),"WsFuzzy") ==0)
+        rType = WSFUZZY;
     else
         throw cRuntimeError("Routing type unknown");
+
+
+    const char *levelsValues = par("levelsValues");
+    cStringTokenizer tokenizerLevesl(levelsValues);
+
+    while ((token = tokenizerLevesl.nextToken()) != NULL)
+    {
+        double val = atof(token);
+        percentajesValues.push_back(val);
+    }
+
+    const char *santionValues = par("santionValues");
+    cStringTokenizer tokenizerSantionValues(santionValues);
+    while ((token = tokenizerSantionValues.nextToken()) != NULL)
+    {
+        double val = atof(token);
+        sanctionValues.push_back(val);
+    }
+    if (!percentajesValues.empty() && percentajesValues.size() != sanctionValues.size())
+        throw cRuntimeError("Size of levelsValues and santionValues are different");
+
 
 
     nextEvent = new cMessage("NewEvent");
@@ -1258,20 +1283,7 @@ void CallApp::handleMessage(cMessage *msg)
 
     if (pkaux->getType() == ACTUALIZE) {
         Actualize *pk = dynamic_cast<Actualize *>(msg);
-        for (unsigned int i = 0; i < pk->getLinkDataArraySize(); i++) {
-            double residual = pk->getLinkData(i).residual;
-            double cost = 1 / residual;
-
-            if (residual > 1e20)
-                dijFuzzy->deleteEdge(pk->getSrcAddr(), pk->getLinkData(i).node);
-            else {
-                double cost1 = 1 / (residual + 100);
-                double cost2 = 1 / (residual - 100);
-                if (cost2 < 0)
-                    cost2 = 1e30;
-                dijFuzzy->addEdge(pk->getSrcAddr(), pk->getLinkData(i).node, cost1, cost, cost2);
-            }
-        }
+        procActualize(pk);
         delete msg;
         return;
     }
@@ -1352,6 +1364,87 @@ void CallApp::finish()
 
 }
 
+void CallApp::procActualize(Actualize *pkt)
+{
+    // actualiza los estados para ejecutar disjtra.
+    int nodeId = pkt->getSrcAddr();
+    for (unsigned int i = 0; i < pkt->getLinkDataArraySize(); i++) {
+        LinkData linkData = pkt->getLinkData(i);
+        if (linkData.nominal == 0) {
+            dijFuzzy->deleteEdge(nodeId, linkData.node);
+            dijkstra->deleteEdge(nodeId, linkData.node);
+        }
+        else {
+            double minResidual = linkData.nominal - linkData.max;
+            double meanResidual = linkData.nominal - linkData.mean;
+            double maxResidual = linkData.nominal - linkData.min;
+            double instResidual = linkData.nominal - linkData.actual;
+
+            if (residual) {
+                if (minResidual < 1e30)
+                    minResidual = 1 / 1e30;
+                else
+                    minResidual = 1 / minResidual;
+
+                if (meanResidual < 1e30)
+                    meanResidual = 1 / 1e30;
+                else
+                    meanResidual = 1 / meanResidual;
+
+                if (maxResidual < 1e30)
+                    maxResidual = 1 / 1e30;
+                else
+                    maxResidual = 1 / maxResidual;
+            }
+            else {
+                // Usar funciones lineales  o hiperbólicas?
+
+                double overCost = 1;
+                if (!percentajesValues.empty()) {
+                    // double res = linkData.nominal - linkData.mean;
+                    //double percentaje = (res/linkData.nominal) * 100;
+                    overCost = 10 * pow (20, - linkData.mean / linkData.nominal);
+                    //double percentaje = (linkData.mean/linkData.nominal) * 100;
+                    /*for (unsigned int i = 0; i < percentajesValues.size(); i++) {
+                        if (percentaje < percentajesValues[i]) {
+                            overCost = sanctionValues[i];
+                            break;
+                        }
+                    }
+                    */
+                }
+                minResidual = (linkData.min / linkData.nominal) * overCost;
+                meanResidual = (linkData.mean / linkData.nominal) * overCost;
+                maxResidual = (linkData.max / linkData.nominal) * overCost;
+                instResidual = linkData.actual / linkData.nominal * overCost;
+
+            }
+
+            if (minResidual == 0)
+                throw cRuntimeError("Problems detected");
+            dijFuzzy->addEdge(nodeId, linkData.node, minResidual, meanResidual, maxResidual);
+            if (par("instValue").boolValue()) {
+                if (rType == SW || rType == WS)
+                    dijkstra->addEdge(nodeId, linkData.node, 1, linkData.nominal - linkData.actual);
+                else
+                    dijkstra->addEdge(nodeId, linkData.node, instResidual, 1);
+            }
+            else {
+                double minResidual = linkData.nominal - linkData.max;
+                double meanResidual = linkData.nominal - linkData.mean;
+                double maxResidual = linkData.nominal - linkData.min;
+                DijkstraFuzzy::FuzzyCost costFuzzy(minResidual,meanResidual,maxResidual);
+                if (rType == SW || rType == WS)
+                    dijkstra->addEdge(nodeId, linkData.node, 1, meanResidual);
+                else if (rType == SWFUZZY || rType == WSFUZZY)
+                    dijkstra->addEdge(nodeId, linkData.node, 1, costFuzzy.exp());
+                else
+                    dijkstra->addEdge(nodeId, linkData.node, meanResidual, 1);
+            }
+        }
+    }
+}
+
 void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
 {
     Enter_Method_Silent();
@@ -1361,62 +1454,5 @@ void CallApp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
         throw cRuntimeError("Sennal no esperada");
         return; //
     }
-    // actualiza los estados para ejecutar disjtra.
-    int nodeId = pkt->getSrcAddr();
-    for (unsigned int i = 0; i < pkt->getLinkDataArraySize(); i++) {
-        LinkData linkData = pkt->getLinkData(i);
-        if (linkData.nominal == 0) {
-            dijFuzzy->deleteEdge(nodeId,linkData.node);
-            dijkstra->deleteEdge(nodeId,linkData.node);
-        }
-        else {
-            double minResidual = linkData.nominal-linkData.min;
-            double meanResidual = linkData.nominal-linkData.mean;
-            double maxResidual = linkData.nominal-linkData.max;
-            double instResidual = linkData.nominal-linkData.actual;
-
-            if (residual) {
-                if (minResidual < 1e30)
-                    minResidual = 1/1e30;
-                else
-                    minResidual = 1/minResidual;
-
-                if (meanResidual < 1e30)
-                    meanResidual = 1/1e30;
-                else
-                    meanResidual = 1/meanResidual;
-
-                if (maxResidual < 1e30)
-                    maxResidual = 1/1e30;
-                else
-                    maxResidual = 1/maxResidual;
-            }
-            else {
-                // Usar funciones lineales  o hiperbólicas?
-
-                minResidual =  (linkData.min/linkData.nominal);
-                meanResidual = (linkData.mean/linkData.nominal);
-                maxResidual = (linkData.max/linkData.nominal);
-                instResidual =  linkData.actual/linkData.nominal;
-
-            }
-
-            if (minResidual == 0)
-                throw cRuntimeError("Problems detected");
-            dijFuzzy->addEdge(nodeId,linkData.node,minResidual, meanResidual, maxResidual);
-            if (par("instValue").boolValue()) {
-                if (rType == SW || rType == WS)
-                    dijkstra->addEdge(nodeId,linkData.node, 1,linkData.nominal-linkData.actual);
-                else
-                    dijkstra->addEdge(nodeId,linkData.node, instResidual,1);
-            }
-            else {
-                if (rType == SW || rType == WS)
-                    dijkstra->addEdge(nodeId,linkData.node, meanResidual,linkData.nominal-linkData.mean);
-                else
-                    dijkstra->addEdge(nodeId,linkData.node, meanResidual,1);
-
-            }
-        }
-    }
+    procActualize(pkt);
 }

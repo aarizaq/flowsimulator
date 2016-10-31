@@ -36,9 +36,10 @@ simple CallApp like IApp
         volatile double flowArrival @unit(s) = default(exponential(1s));
         volatile double flowDuration @unit(s) = default(exponential(1s));
         volatile double flowUsedBandwith @unit(bps);  //
-        
+                
         
         bool instValue = default(false); // use instantaneous value instead of the mean value
+        bool fuzzyCorregido = default(false);
                 
         string levelsValues = default(""); // number of level in the asignation of cost, "30 60 90" changes in the cost at 30% residual, 60 % residual and 90% residual    
         string santionValues = default("1 5 10");// only used if levelsValues has values, in this case the size of this must be equal in both 

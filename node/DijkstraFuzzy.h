@@ -162,7 +162,7 @@ public:
     virtual void setFromDijkstraFuzzy(const DijkstraFuzzy::LinkArray &, LinkArray &);*/
 
     virtual void cleanLinkArray(LinkArray &);
-    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, double cost2, LinkArray &);
+    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, const double &cost, const double &cost2, LinkArray &);
     virtual void addEdge(const NodeId & dest_node, Edge*, LinkArray &);
     virtual void deleteEdge(const NodeId &, const NodeId &, LinkArray &);
     virtual Edge* removeEdge(const NodeId & originNode, const NodeId & last_node, LinkArray & linkArray);
@@ -170,7 +170,7 @@ public:
     virtual void cleanLinkArray();
     virtual void clearAll();
     virtual void cleanRoutes() {routeMap.clear();}
-    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, double cost2);
+    virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, const double &cost, const double &cost2);
     virtual void addEdge(const NodeId & dest_node, Edge *);
     virtual void deleteEdge(const NodeId &, const NodeId &);
     virtual void setRoot(const NodeId & dest_node);
@@ -182,34 +182,6 @@ public:
     virtual bool getRoute(const NodeId &, std::vector<NodeId> &, const RouteMap &);
     virtual void setMethod(Method p) {method = p;}
 };
-
-inline bool operator <(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
-{
-    if (x.m == Dijkstra::widestshortest) {
-        if (x.cost != y.cost)
-            return x.cost < y.cost;
-        return x.cost2 > y.cost2;
-    }
-    if (x.m == Dijkstra::shortestwidest)
-        if (x.cost2 != y.cost2)
-            return x.cost2 > y.cost2;
-        return x.cost < y.cost;
-    return x.cost < y.cost;
-}
-
-inline bool operator >(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
-{
-    if (x.m == Dijkstra::widestshortest) {
-        if (x.cost != y.cost)
-            return x.cost > y.cost;
-        return x.cost2 < y.cost2;
-    }
-    if (x.m == Dijkstra::shortestwidest)
-        if (x.cost2 != y.cost2)
-            return x.cost2 < y.cost2;
-        return x.cost > y.cost;
-    return x.cost > y.cost;
-}
 
 class DijkstraFuzzy
 {

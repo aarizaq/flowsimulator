@@ -1400,24 +1400,24 @@ void CallApp::procActualize(Actualize *pkt)
                 // Usar funciones lineales  o hiperbólicas?
 
                 double overCost = 1;
-                if (!percentajesValues.empty()) {
-                    // double res = linkData.nominal - linkData.mean;
-                    //double percentaje = (res/linkData.nominal) * 100;
+                if (par("fuzzyCorregido").boolValue()) {
                     overCost = 10 * pow (20, - linkData.mean / linkData.nominal);
+                }
+                else if (!percentajesValues.empty()) {
+                    double res = linkData.nominal - linkData.mean;
+                    double percentaje = (res/linkData.nominal) * 100;
                     //double percentaje = (linkData.mean/linkData.nominal) * 100;
-                    /*for (unsigned int i = 0; i < percentajesValues.size(); i++) {
+                    for (unsigned int i = 0; i < percentajesValues.size(); i++) {
                         if (percentaje < percentajesValues[i]) {
                             overCost = sanctionValues[i];
                             break;
                         }
                     }
-                    */
                 }
                 minResidual = (linkData.min / linkData.nominal) * overCost;
                 meanResidual = (linkData.mean / linkData.nominal) * overCost;
                 maxResidual = (linkData.max / linkData.nominal) * overCost;
                 instResidual = linkData.actual / linkData.nominal * overCost;
-
             }
 
             if (minResidual == 0)

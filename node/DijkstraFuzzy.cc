@@ -21,6 +21,35 @@ DijkstraFuzzy::FuzzyCost DijkstraFuzzy::minimumCost;
 DijkstraFuzzy::FuzzyCost DijkstraFuzzy::maximumCost;
 double DijkstraFuzzy::alpha = 0.55;
 
+inline bool operator <(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
+{
+    if (x.m == Dijkstra::widestshortest) {
+        if (x.cost != y.cost)
+            return (x.cost < y.cost);
+        return (x.cost2 > y.cost2);
+    }
+    if (x.m == Dijkstra::shortestwidest)
+        if (x.cost2 != y.cost2)
+            return (x.cost2 > y.cost2);
+        return (x.cost < y.cost);
+    return (x.cost < y.cost);
+}
+
+inline bool operator >(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
+{
+    if (x.m == Dijkstra::widestshortest) {
+        if (x.cost != y.cost)
+            return (x.cost > y.cost);
+        return (x.cost2 < y.cost2);
+    }
+    if (x.m == Dijkstra::shortestwidest)
+        if (x.cost2 != y.cost2)
+            return (x.cost2 < y.cost2);
+        return (x.cost > y.cost);
+    return (x.cost > y.cost);
+}
+
+
 DijkstraFuzzy::State::State()
 {
     idPrev = InvalidId;
@@ -1126,14 +1155,14 @@ Dijkstra::~Dijkstra()
     cleanLinkArray();
 }
 
-void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost, double cost2, LinkArray & linkArray)
+void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, const double &cost, const double &cost2, LinkArray & linkArray)
 {
     auto it = linkArray.find(originNode);
     if (it != linkArray.end()) {
         for (unsigned int i = 0; i < it->second.size(); i++) {
             if (last_node == it->second[i]->last_node_) {
                 // check changes in the cost
-                if (it->second[i]->Cost() != cost) {
+                if (it->second[i]->Cost() != cost || it->second[i]->Cost2() != cost2) {
                     it->second[i]->Cost() = cost;
                     it->second[i]->Cost2() = cost2;
                     // delete routing stored information
@@ -1192,7 +1221,7 @@ Dijkstra::Edge * Dijkstra::removeEdge(const NodeId & originNode, const NodeId & 
     return (nullptr);
 }
 
-void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, double cost,  double cost2)
+void Dijkstra::addEdge(const NodeId & originNode, const NodeId & last_node, const double &cost,  const double &cost2)
 {
     addEdge(originNode, last_node, cost, cost2, linkArray);
 }
@@ -1229,7 +1258,8 @@ void Dijkstra::run(const int &rootNode, const LinkArray &linkArray, RouteMap &ro
 
 void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArray &linkArray, RouteMap &routeMap)
 {
-    std::multiset<SetElem> heap;
+    //std::multiset<SetElem> heap;
+    std::deque<SetElem> heap;
     routeMap.clear();
 
     auto it = linkArray.find(rootNode);
@@ -1243,10 +1273,42 @@ void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArr
     SetElem elem;
     elem.iD = rootNode;
     elem.cost = 0;
-    heap.insert(elem);
+    //heap.insert(elem);
+    heap.push_back(elem);
     while (!heap.empty()) {
-        SetElem elem = *heap.begin();
-        heap.erase(heap.begin());
+        auto itHeap = heap.begin();
+        double cost1It = itHeap->cost;
+        double cost2It = itHeap->cost2;
+        // search min
+        for (auto it = heap.begin(); it!=heap.end(); ++it)
+        {
+            if (method == Method::widestshortest) {
+                if (it->cost < cost1It || (it->cost == cost1It && it->cost2 > cost2It)) {
+                    itHeap = it;
+                    cost1It = itHeap->cost;
+                    cost2It = itHeap->cost2;
+                }
+            }
+            else if (method == Method::shortestwidest) {
+                if (it->cost2 > cost2It || (it->cost2 == cost2It && it->cost < cost1It)) {
+                    itHeap = it;
+                    cost1It = itHeap->cost;
+                    cost2It = itHeap->cost2;
+                }
+            }
+            else {
+                if (it->cost < cost1It) {
+                    itHeap = it;
+                    cost1It = itHeap->cost;
+                    cost2It = itHeap->cost2;
+                }
+            }
+        }
+
+        // SetElem elem = *heap.begin();
+        //heap.erase(heap.begin());
+        SetElem elem = *itHeap;
+        heap.erase(itHeap);
         auto it = routeMap.find(elem.iD);
         if (it == routeMap.end())
             throw cRuntimeError("node not found in routeMap");
@@ -1263,30 +1325,35 @@ void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArr
         if (linkIt == linkArray.end())
             throw cRuntimeError("Error link not found in linkArray");
         for (unsigned int i = 0; i < linkIt->second.size(); i++) {
+
             Edge* current_edge = (linkIt->second)[i];
             double cost;
             double cost2;
-
             auto itNext = routeMap.find(current_edge->last_node());
             cost = current_edge->cost + it->second.cost;
             cost2 = std::min(current_edge->cost2, it->second.cost2);
 
-            double maxCost = itNext->second.cost;
-            double maxCost2 = itNext->second.cost2;
-
-            if (itNext == routeMap.end()) {
+           if (itNext == routeMap.end()) {
                 State state;
                 state.idPrev = elem.iD;
                 state.cost = cost;
+                state.cost2 = cost2;
                 state.label = tent;
                 routeMap[current_edge->last_node()] = state;
 
                 SetElem newElem;
                 newElem.iD = current_edge->last_node();
                 newElem.cost = cost;
-                heap.insert(newElem);
+                newElem.cost2 = cost2;
+                heap.push_back(newElem);
+                //heap.insert(newElem);
             }
             else {
+                if (itNext->second.label == perm)
+                    continue;
+
+                double maxCost = itNext->second.cost;
+                double maxCost2 = itNext->second.cost2;
                 bool actualize = false;
 
                 if (method == Method::widestshortest) {
@@ -1308,13 +1375,14 @@ void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArr
                     SetElem newElem;
                     newElem.iD = current_edge->last_node();
                     newElem.cost = cost;
-                    for (auto it = heap.begin(); it != heap.end(); ++it) {
-                        if (it->iD == newElem.iD && it->cost > newElem.cost) {
-                            heap.erase(it);
-                            break;
-                        }
-                    }
-                    heap.insert(newElem);
+                    //for (auto it = heap.begin(); it != heap.end(); ++it) {
+                    //    if (it->iD == newElem.iD && it->cost > newElem.cost) {
+                    //        heap.erase(it);
+                    //        break;
+                    //    }
+                    //}
+                    heap.push_back(newElem);
+                    //heap.insert(newElem);
                 }
             }
         }

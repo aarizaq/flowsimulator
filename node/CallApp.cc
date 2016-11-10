@@ -13,7 +13,6 @@
 #include <fstream>
 #include "CallApp.h"
 
-
 uint64_t CallApp::callIdentifier = 1;
 bool CallApp::residual = false;
 simsignal_t CallApp::actualizationSignal = registerSignal("actualizationSignal");
@@ -89,8 +88,18 @@ void CallApp::readTopo()
       else
           dijkstra->clearAll();
 
+    if (rType == BACKUPROUTEKSH) {
+        if (dijkstraks == nullptr)
+            dijkstraks = new DijkstraKshortest(10); // maximum patsh
+        else
+            dijkstraks->cleanLinkArray();
+
+    }
+
     dijFuzzy->setRoot(getParentModule()->par("address"));
     dijkstra->setRoot(getParentModule()->par("address"));
+    if (dijkstraks)
+        dijkstraks->setRoot(getParentModule()->par("address"));
 
     std::vector<std::string> nedTypes;
     nedTypes.push_back(getParentModule()->getNedTypeName());
@@ -191,6 +200,8 @@ void CallApp::readTopo()
             dijFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
             dijkstra->addEdge(address, addressAux, minResidual,1);
             dj.addEdge(address, addressAux, 1, 10000);
+            if (dijkstraks)
+                dijkstraks->addEdgeWs(address, addressAux,1,minResidual);
         }
     }
     NodePairs links;
@@ -549,8 +560,66 @@ void CallApp::newCall() {
             send(pk2, "out");
         }
     }
+    else if (rType == BACKUPROUTEKSH) {
+        // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
+        if (dijkstraks == nullptr)
+            throw cRuntimeError ("dijkstraks is null");
+        DijkstraKshortest::Kroutes routes;
+        dijkstraks->setRoot(myAddress);
+        dijkstraks->getRouteMapK(destAddress,routes);
+        if (routes.empty())
+            dijkstraks->runUntil(destAddress);
+        dijkstraks->getRouteMapK(destAddress,routes);
+        DijkstraKshortest::Route *route1 = nullptr;
+        DijkstraKshortest::Route *route2 = nullptr;
+        //dijFuzzy->getRoute(destAddress, min, cost);
+        if (!routes.empty()) {
+            // search two routes with less common links
+            int minCommon = 1000;
+            int totalSizes = 10000;
+            for (unsigned int i = 0 ; i < routes.size()-1;i++)
+            {
+                for (unsigned int j = i+1 ; j < routes.size()-1;j++) {
+                    int common = dijkstraks->commonLinks(routes[i],routes[j]);
+                    if (minCommon > common || (minCommon == common && totalSizes > routes[i].size() + routes[j].size()))
+                    {
+                        route1 = &routes[i];
+                        route2 = &routes[j];
+                        totalSizes = routes[i].size() + routes[j].size();
+                        minCommon = common;
+                    }
+                }
+            }
+            // new call id for backup route
+            Packet *pk2 = pk->dup();
+            pk2->setCallId(callIdentifier);
+            callIdentifier++;
 
+            pk2->setCallIdBk(pk->getCallId());
+            pk->setCallIdBk(pk2->getCallId());
 
+            pk2->setRouteArraySize(route1->size());
+            for (unsigned int i = 0; i < route1->size(); i++) {
+                pk2->setRoute(i, (*route1)[i]);
+            }
+
+            pk->setRouteArraySize(route2->size());
+            for (unsigned int i = 0; i < route2->size(); i++) {
+                pk->setRoute(i, (*route2)[i]);
+            }
+
+            if (route2->size() > route1->size())
+                pk2->setType(RESERVEBK);
+            else {
+                pk->setType(RESERVEBK);
+                Packet *auxMsg = pk2;
+                pk2 = pk;
+                pk = auxMsg;
+            }
+            // send before the best
+            send(pk2, "out");
+        }
+    }
 // TODO : recall timer,
     send(pk, "out");
 }
@@ -1428,6 +1497,8 @@ void CallApp::procActualize(Actualize *pkt)
                     dijkstra->addEdge(nodeId, linkData.node, 1, linkData.nominal - linkData.actual);
                 else
                     dijkstra->addEdge(nodeId, linkData.node, instResidual, 1);
+                if (dijkstraks)
+                    dijkstraks->addEdgeWs(nodeId, linkData.node,1,instResidual);
             }
             else {
                 double minResidual = linkData.nominal - linkData.max;
@@ -1440,6 +1511,8 @@ void CallApp::procActualize(Actualize *pkt)
                     dijkstra->addEdge(nodeId, linkData.node, 1, costFuzzy.exp());
                 else
                     dijkstra->addEdge(nodeId, linkData.node, meanResidual, 1);
+                if (dijkstraks)
+                    dijkstraks->addEdgeWs(nodeId, linkData.node,1,meanResidual);
             }
         }
     }

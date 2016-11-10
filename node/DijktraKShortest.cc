@@ -629,3 +629,19 @@ void DijkstraKshortest::getRouteMapK(const NodeId &nodeId, Kroutes &routes)
     routes = it->second;
 }
 
+
+int DijkstraKshortest::commonLinks(const Route &S, const Route &Sp)
+{
+    int common = 0;
+    for (unsigned int i = 1 ; i < S.size(); i++) {
+        auto it = std::find(Sp.begin(), Sp.end(), S[i]);
+        if (it != Sp.end()) { // common node, check link
+            unsigned int pos = std::distance(Sp.begin(), it);
+            // check previous node
+            if (S[i-1] == Sp[pos-1])
+                common++;
+        }
+    }
+    return (common);
+}
+

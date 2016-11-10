@@ -216,6 +216,7 @@ public:
     virtual bool getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, int k = 0);
     virtual void setRouteMapK();
     virtual void getRouteMapK(const NodeId &nodeId, Kroutes &routes);
+    virtual int commonLinks(const Route &S, const Route &Sp);
 };
 
 inline bool operator <(const DijkstraKshortest::SetElem& x, const DijkstraKshortest::SetElem& y)

@@ -13,6 +13,7 @@
 #include "DijkstraFuzzy.h"
 #include "FlowDataTypes.h"
 #include "Packet_m.h"
+#include "DijktraKShortest.h"
 
 using namespace omnetpp;
 
@@ -29,6 +30,7 @@ protected:
         SOURCEROUTINGNORMAL,
         DISJOINT,
         BACKUPROUTE,
+        BACKUPROUTEKSH,
         SW,
         WS,
         SWFUZZY,
@@ -127,6 +129,7 @@ private:
     std::multimap<simtime_t, FlowEvent*> FlowEvents;
     DijkstraFuzzy *dijFuzzy = nullptr;
     Dijkstra *dijkstra = nullptr;
+    DijkstraKshortest *dijkstraks = nullptr;
     SequenceTable sequenceTable;
 
     std::map<int, long double> receivedBytes;

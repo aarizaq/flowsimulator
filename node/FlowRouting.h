@@ -49,6 +49,7 @@ private:
     PortDataArray portDataArray;
 
     FlowInfoVector pendingFlows;
+    FlowInfoVector delayedFlows;
     FlowInfoMap inputFlows; // flows not assigned to a call
     FlowInfoMap outputFlows; // flows not assigned to a call
 
@@ -92,6 +93,9 @@ private:
     virtual bool procStartFlow(Packet *, const int&, const int&);
     virtual bool procFlowChange(Packet *, const int&, const int&);
     virtual bool procEndFlow(Packet *);
+    virtual bool procEndFlowStoreAndForward(Packet *);
+    virtual bool procEndFlowLost(Packet *);
+
     virtual void postProc(Packet *, const int&, const int&, const int &);
     virtual void computeUsedBw();
     virtual void recordOccupation(PortData &port, const ChangeBw &val);

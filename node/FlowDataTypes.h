@@ -23,6 +23,7 @@ enum CallState
 enum FlowAdmisionModes
 {
     DISCARD, // discard the flow if not enough bandwith
+    STOREANDFORWARD,
     FINITEQUEUE, // the bandwidth is shared between the nodes
     INFINITEQUEUE
 };
@@ -131,7 +132,8 @@ struct FlowInfo
     simtime_t end;
     cMessage *startMsg = nullptr;
     cMessage *endMsg = nullptr;
-
+    bool delayed = false;
+    simtime_t delay;
 
     bool operator <(const FlowInfo& b) const
     {

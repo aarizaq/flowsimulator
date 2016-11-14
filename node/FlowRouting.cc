@@ -191,8 +191,16 @@ void FlowRouting::initialize()
     localOutSize = this->gateSize("localOut");
 
     const char *flowClass = par("flowClass").stringValue();
-    if (strcmp(flowClass, "") != 0)
-        flowDist = check_and_cast<BaseFlowDistribution*>(createOne(flowClass));
+    if (strcmp(flowClass, "") != 0) {
+        if ((strcmp(flowClass, "Discard") == 0) && (strcmp(flowClass, "StoreAndForward") == 0))
+            flowDist = check_and_cast<BaseFlowDistribution*>(createOne(flowClass));
+        if (strcmp(flowClass, "Discard") == 0)
+            flowAdmisionMode = DISCARD;
+        if (strcmp(flowClass, "StoreAndForward") == 0)
+            flowAdmisionMode = STOREANDFORWARD;
+        if (strcmp(flowClass, "FiniteQueue") == 0)
+            flowAdmisionMode = FINITEQUEUE;
+    }
 
     actualizeTimer = new cMessage("actualize timer");
     //computeBwTimer = new cMessage("actualize bw timer");
@@ -1108,6 +1116,66 @@ bool FlowRouting::getForwarPortFreeFlow(Packet *pk, int &portForward)
 void FlowRouting::checkPendingList()
 {
 
+    // first check delayed list.
+    if (!delayedFlows.empty())
+    {
+        for (auto it = delayedFlows.begin();it != delayedFlows.end();) { // search the first that you can send
+        // proc
+            simtime_t delay = it->end - it->start;
+            if (it->port != -1 && portDataArray[it->port].flowOcupation > it->used && portDataArray[it->port].portStatus == UP) {
+                portDataArray[it->port].flowOcupation -= it->used;
+                ChangeBw val;
+                val.instant = simTime();
+                val.value = portDataArray[it->port].flowOcupation;
+                recordOccupation(portDataArray[it->port], val);
+                Packet *pkStartFlow = new Packet();
+                it->delayed = true;
+                it->delay = it->end - it->start;
+                if (it->identify.callId() > 0) {
+                    auto itCallInfoAux = callInfomap.find(it->identify.callId());
+                    itCallInfoAux->second.outputFlows.push_back(*it);
+                    // send start flow to the next node
+                    if (itCallInfoAux->second.node1 == it->identify.src()) {
+                        pkStartFlow->setSrcAddr(itCallInfoAux->second.node1);
+                        pkStartFlow->setDestAddr(itCallInfoAux->second.node2);
+                    }
+                    else {
+                        pkStartFlow->setSrcAddr(itCallInfoAux->second.node2);
+                        pkStartFlow->setDestAddr(itCallInfoAux->second.node1);
+                    }
+                }
+                else {
+                    outputFlows[it->identify] = *it;
+                    pkStartFlow->setSrcAddr(it->identify.src());
+                    pkStartFlow->setDestAddr(it->dest); // source routing,
+                    if (!it->sourceRouting.empty()) {
+                        pkStartFlow->setRouteArraySize(it->sourceRouting.size());
+                        for (unsigned int i = 0; i < pkStartFlow->getRouteArraySize(); i++) {
+                            pkStartFlow->setRoute(i, it->sourceRouting[i]);
+                        }
+                    }
+                }
+                pkStartFlow->setCallId(it->identify.callId());
+                pkStartFlow->setFlowId(it->identify.flowId());
+                pkStartFlow->setSourceId(it->identify.srcId());
+                pkStartFlow->setDestinationId(it->destId);
+                pkStartFlow->setType(STARTFLOW);
+                pkStartFlow->setReserve(it->used);
+                if (hasGUI()) {
+                    char pkname[100];
+                    sprintf(pkname, "StartFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkStartFlow->getSrcAddr(),
+                            pkStartFlow->getDestAddr(), pkStartFlow->getCallId(), pkStartFlow->getFlowId(), pkStartFlow->getDestinationId());
+                    pkStartFlow->setName(pkname);
+                }
+                send(pkStartFlow, "out", it->port);
+                scheduleAt(simTime()+delay,it->endMsg);
+                it = delayedFlows.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+
     if (!pendingFlows.empty()) {
         for (auto it = pendingFlows.begin(); it != pendingFlows.end();) {
             //
@@ -1154,18 +1222,17 @@ void FlowRouting::checkPendingList()
             }
 
             if (it->port != -1 && portDataArray[it->port].flowOcupation > it->used && portDataArray[it->port].portStatus == UP) {
-
                 portDataArray[it->port].flowOcupation -= it->used;
                 ChangeBw val;
                 val.instant = simTime();
                 val.value = portDataArray[it->port].flowOcupation;
                 recordOccupation(portDataArray[it->port], val);
                 Packet *pkStartFlow = new Packet();
+                it->delayed = true;
+                it->delay = simTime() - it->start;
 
                 if (it->identify.callId() > 0) {
                     auto itCallInfoAux = callInfomap.find(it->identify.callId());
-
-
                     itCallInfoAux->second.outputFlows.push_back(*it);
                     // send start flow to the next node
 
@@ -1179,14 +1246,13 @@ void FlowRouting::checkPendingList()
                     }
                 }
                 else {
-                    inputFlows[it->identify] = *it;
+                    outputFlows[it->identify] = *it;
                     pkStartFlow->setSrcAddr(it->identify.src());
                     pkStartFlow->setDestAddr(it->dest); // source routing,
                     if (!it->sourceRouting.empty()) {
                         pkStartFlow->setRouteArraySize(it->sourceRouting.size());
                         for (unsigned int i = 0; i < pkStartFlow->getRouteArraySize(); i++) {
                             pkStartFlow->setRoute(i, it->sourceRouting[i]);
-
                         }
                     }
                 }
@@ -1196,6 +1262,7 @@ void FlowRouting::checkPendingList()
                 pkStartFlow->setDestinationId(it->destId);
                 pkStartFlow->setType(STARTFLOW);
                 pkStartFlow->setReserve(it->used);
+
                 if (hasGUI()) {
                     char pkname[100];
                     sprintf(pkname, "StartFlowL3-%d-to-%d-Call id#%lud-flow-%ld-dest Id %i", pkStartFlow->getSrcAddr(),
@@ -1332,6 +1399,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
     flowInfo.used = pk->getReserve();
     flowInfo.port = portForward;
     flowInfo.portInput = portInput;
+    flowInfo.start = simTime();
     if (!isCallOriented)
         flowInfo.destId = pk->getDestinationId();
     else
@@ -1444,6 +1512,7 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
         itCallInfo = callInfomap.find(flowInfoInputPtr->identify.callId());
 
     switch (flowAdmisionMode) {
+    case STOREANDFORWARD:
     case DISCARD:
         pendingFlows.push_back(*flowInfoInputPtr);
         // delete the output flow if exist and send end flow
@@ -1697,6 +1766,14 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
 
 bool FlowRouting::procEndFlow(Packet *pk)
 {
+   if (flowAdmisionMode == STOREANDFORWARD)
+       return procEndFlowStoreAndForward(pk);
+   else
+       return procEndFlowLost(pk);
+}
+
+bool FlowRouting::procEndFlowLost(Packet *pk)
+{
     bool isCallOriented = (pk->getCallId() > 0);
 
     FlowIdentification flowId(pk->getSrcAddr(),pk->getFlowId(),pk->getCallId(),pk->getSourceId());
@@ -1720,6 +1797,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
         }
 
         if (it == itCallInfo->second.outputFlows.end()) {
+
             // It has been impossible to send the start flow message to the next hop,  delete and return.
             for (auto it = pendingFlows.begin(); it != pendingFlows.end(); ++it) {
                 if (it->identify == flowId) {
@@ -1766,6 +1844,131 @@ bool FlowRouting::procEndFlow(Packet *pk)
             val.value = portDataArray[itFlowOutput->second.port].flowOcupation;
             recordOccupation(portDataArray[itFlowOutput->second.port], val);
             outputFlows.erase(itFlowOutput);
+        }
+        else {
+            delete pk;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
+{
+    bool isCallOriented = (pk->getCallId() > 0);
+
+    FlowIdentification flowId(pk->getSrcAddr(),pk->getFlowId(),pk->getCallId(),pk->getSourceId());
+
+    if (pk->isSelfMessage()) {// delayed end
+        for (auto it = delayedFlows.begin();it != delayedFlows.end();++it) { // search the first that you can send
+        // proc
+            if (it->identify == flowId) {
+                it->endMsg = nullptr;
+                throw cRuntimeError("Flow in delayed list error");
+                break;
+            }
+        }
+    }
+
+    if (isCallOriented) {
+        auto itCallInfo = callInfomap.find(pk->getCallId());
+
+        // check if the flow is in the pending list.
+        auto itOut = itCallInfo->second.outputFlows.begin();
+        while (itOut != itCallInfo->second.outputFlows.end()) {
+            if (itOut->identify == flowId)
+                break;
+            ++itOut;
+        }
+
+        bool delayed = false;
+        if (itOut == itCallInfo->second.outputFlows.end()) {// delayed flow, move to delayed list
+            delayed = true;
+        }
+
+        for (auto it = itCallInfo->second.inputFlows.begin(); it != itCallInfo->second.inputFlows.end(); ++it) {
+            if (it->identify == flowId) {
+                if (delayed  && !pk->isSelfMessage()) {
+                    if (pk->getDestAddr() != myAddress)
+                        it->endMsg = pk;
+                    it->end = simTime();
+                    delayedFlows.push_back(*it);
+                }
+                itCallInfo->second.inputFlows.erase(it);
+                break;
+            }
+        }
+
+        if (delayed) {
+            // It has been impossible to send the start flow message to the next hop,  record the time of end
+            for (auto it = pendingFlows.begin(); it != pendingFlows.end(); ++it) {
+                if (it->identify == flowId) {
+                    pendingFlows.erase(it);
+                    break;
+                }
+            }
+            if (pk->getDestAddr() == myAddress) // send
+                return true;
+            if (pk->isSelfMessage())
+                delete pk;
+            return (false);
+            // throw cRuntimeError("Error Flow id not found reserved");
+        }
+        // check if the flow has been delayed, in this case delay the end flow
+        if (!pk->isSelfMessage() && itOut->delayed) {
+            scheduleAt(simTime()+itOut->delay,pk);
+            return (false);
+        }
+
+        if (itOut->port != -1) {
+            portDataArray[itOut->port].flowOcupation += itOut->used;
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[itOut->port].flowOcupation;
+            recordOccupation(portDataArray[itOut->port], val);
+        }
+        itCallInfo->second.outputFlows.erase(itOut);
+    }
+    else
+    {
+
+        auto itFlowInput = inputFlows.find(flowId);
+        auto itFlowOutput = outputFlows.find(flowId);
+
+        if (itFlowInput == inputFlows.end()) {
+            if (itFlowOutput != outputFlows.end() && !itFlowOutput->second.delayed)
+                throw cRuntimeError("In outputFlows but not in inputFlows");
+            else if (pk->getDestAddr() != myAddress) {
+                delete pk;
+                return false;
+            }
+        }
+
+        if (itFlowOutput != outputFlows.end()) {
+            // check delay
+            if (!pk->isSelfMessage() && itFlowOutput->second.delayed) {
+                scheduleAt(simTime()+itFlowOutput->second.delay,pk);
+                return (false);
+            }
+            portDataArray[itFlowOutput->second.port].flowOcupation += itFlowOutput->second.used;
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[itFlowOutput->second.port].flowOcupation;
+            recordOccupation(portDataArray[itFlowOutput->second.port], val);
+            outputFlows.erase(itFlowOutput);
+        }
+        else {
+
+            if (!pk->isSelfMessage()) {
+                if (pk->getDestAddr() != myAddress)
+                    itFlowInput->second.endMsg = pk;
+                itFlowInput->second.end = simTime();
+                delayedFlows.push_back(itFlowInput->second);
+            }
+            else
+                delete pk;
+            inputFlows.erase(itFlowInput);
+            return false;
         }
     }
     return true;

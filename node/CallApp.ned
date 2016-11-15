@@ -46,6 +46,9 @@ simple CallApp like IApp
          
          
         @display("i=block/browser");
+        
+        @signal[rcvdPk](type=cPacket);        
+        @statistic[endToEndDelay](title="end-to-end delay"; source="messageAge(rcvdPk)"; unit=s; record=histogram,vector; interpolationmode=none);
     gates:
         input in;
         output out;

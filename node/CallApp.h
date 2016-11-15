@@ -150,6 +150,7 @@ private:
     void bytesTraceRec(const CallInfo *callInfo);
     void storeCallStatistics(const CallInfo *callInfo);
     static simsignal_t actualizationSignal;
+    static simsignal_t rcvdPk;
 public:
     CallApp();
     virtual ~CallApp();

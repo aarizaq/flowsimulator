@@ -16,6 +16,8 @@
 uint64_t CallApp::callIdentifier = 1;
 bool CallApp::residual = false;
 simsignal_t CallApp::actualizationSignal = registerSignal("actualizationSignal");
+simsignal_t CallApp::rcvdPk = registerSignal("rcvdPk");
+
 
 Define_Module(CallApp);
 
@@ -1039,6 +1041,7 @@ void CallApp::procFlowPk(Packet *pk) {
 //      throw cRuntimeError("Call id is not registered");
 
     if (pk->getType() == ENDFLOW) {
+        emit(rcvdPk,pk);
         if (flowId.callId() > 0) {
             auto itAux = activeCalls.find(flowId.callId());
             if (itAux == activeCalls.end())

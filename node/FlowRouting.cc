@@ -1176,6 +1176,20 @@ void FlowRouting::checkPendingList()
         }
     }
 
+    int storeSize = par("storeAndForwardSize").longValue();
+    bool full = false;
+    if (storeSize != -1) {
+        int delayedFlow = 0;
+        for (auto it = pendingFlows.begin(); it != pendingFlows.end(); ++it) {
+            if (it->delayed)
+                delayedFlow++;
+        }
+        delayedFlow += (int)delayedFlows.size();
+        if (delayedFlow >= storeSize)
+            full = true;
+    }
+
+
     if (!pendingFlows.empty()) {
         for (auto it = pendingFlows.begin(); it != pendingFlows.end();) {
             //
@@ -1228,7 +1242,8 @@ void FlowRouting::checkPendingList()
                 val.value = portDataArray[it->port].flowOcupation;
                 recordOccupation(portDataArray[it->port], val);
                 Packet *pkStartFlow = new Packet();
-                it->delayed = true;
+                if (!full)
+                    it->delayed = true;
                 it->delay = simTime() - it->start;
 
                 if (it->identify.callId() > 0) {
@@ -1869,6 +1884,19 @@ bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
             }
         }
     }
+    int storeSize = par("storeAndForwardSize").longValue();
+    bool full = false;
+    if (storeSize != -1) {
+        int delayedFlow = 0;
+        for (auto it = pendingFlows.begin(); it != pendingFlows.end(); ++it) {
+            if (it->delayed)
+                delayedFlow++;
+        }
+        delayedFlow += (int)delayedFlows.size();
+        if (delayedFlow >= storeSize)
+            full = true;
+    }
+
 
     if (isCallOriented) {
         auto itCallInfo = callInfomap.find(pk->getCallId());
@@ -1888,7 +1916,7 @@ bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
 
         for (auto it = itCallInfo->second.inputFlows.begin(); it != itCallInfo->second.inputFlows.end(); ++it) {
             if (it->identify == flowId) {
-                if (delayed  && !pk->isSelfMessage()) {
+                if (delayed  && !pk->isSelfMessage() && !full) {
                     if (pk->getDestAddr() != myAddress)
                         it->endMsg = pk;
                     it->end = simTime();
@@ -1915,7 +1943,7 @@ bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
             // throw cRuntimeError("Error Flow id not found reserved");
         }
         // check if the flow has been delayed, in this case delay the end flow
-        if (!pk->isSelfMessage() && itOut->delayed) {
+        if (!pk->isSelfMessage() && itOut->delayed && !full) {
             scheduleAt(simTime()+itOut->delay,pk);
             return (false);
         }
@@ -1959,7 +1987,7 @@ bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
         }
         else {
 
-            if (!pk->isSelfMessage()) {
+            if (!pk->isSelfMessage() && !full) {
                 if (pk->getDestAddr() != myAddress)
                     itFlowInput->second.endMsg = pk;
                 itFlowInput->second.end = simTime();

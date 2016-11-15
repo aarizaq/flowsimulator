@@ -20,6 +20,7 @@ simple FlowRouting
         bool actualizeWithSignals = default(false);
         double minimumTimeActualize @unit(s) = default(60s); // minimum time between two actualization messages
         string flowClass @enum("","Discard","StoreAndForward","FiniteQueue") = default(""); // como se comporta el router cuando está lleno el canal, como tira los datos
+        int storeAndForwardSize = default(-1);
         bool actPercentage = default(false);
         double percentage = default(0.1);
         volatile double breakDelay @unit(s) = default(0s);

@@ -12,6 +12,7 @@
 #include <iostream>
 #include <fstream>
 #include "CallApp.h"
+#include <cinttypes>
 
 uint64_t CallApp::callIdentifier = 1;
 bool CallApp::residual = false;
@@ -309,7 +310,7 @@ void CallApp::procNextEvent()
                 delayAux = TimeOff->doubleValue();
                 pkFlow->setReserve(callInfo->usedBandwith);
 
-                sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d",
+                sprintf(pkname, "FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d",
                                                 myAddress, pkFlow->getDestAddr(),
                                                 pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
                 pkFlow->setName(pkname);
@@ -325,7 +326,7 @@ void CallApp::procNextEvent()
                 delayAux = TimeOn->doubleValue();
                 callInfo->startOn = simTime();
 
-                sprintf(pkname, "FlowOn-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d",
+                sprintf(pkname, "FlowOn-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d",
                         myAddress, pkFlow->getDestAddr(),
                         pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
                 pkFlow->setName(pkname);
@@ -349,7 +350,7 @@ void CallApp::procNextEvent()
                     pkFlow->setType(ENDFLOW);
                     pkFlow->setReserve(elem.usedBandwith);
                     delayAux = TimeOff->doubleValue();
-                    sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                    sprintf(pkname, "FlowOff-%d-to-%d-CallId#%" PRIu64 "- FlowId#%" PRIu64 " -Sid-%d",
                             myAddress, pkFlow->getDestAddr(),
                             pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
                     pkFlow->setName(pkname);
@@ -365,7 +366,7 @@ void CallApp::procNextEvent()
                     pkFlow->setType(STARTFLOW);
                     delayAux = TimeOn->doubleValue();
                     callInfo->startOn = simTime();
-                    sprintf(pkname, "FlowOn-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+                    sprintf(pkname, "FlowOn-%d-to-%d-CallId#%" PRIu64 " - FlowId#%" PRIu64 " -Sid-%d",
                             myAddress, pkFlow->getDestAddr(),
                             pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
                     pkFlow->setName(pkname);
@@ -397,7 +398,7 @@ void CallApp::procNextEvent()
 
         pkFlow->setType(ENDFLOW);
         pkFlow->setFlowId(flowEvent->flowId);
-        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%lud- FlowId#%lud -Sid-%d",
+        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%" PRIu64 "- FlowId#%" PRIu64 " -Sid-%d",
                 myAddress, pkFlow->getDestAddr(),
                 pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
         pkFlow->setName(pkname);
@@ -428,7 +429,7 @@ void CallApp::newCall() {
     }
     int destAddress = destAddresses[intuniform(0, destAddresses.size() - 1)];
 
-    sprintf(pkname, "CallReserve-%d-to-%d-Call id#%lud-Did-%ld", myAddress,
+    sprintf(pkname, "CallReserve-%d-to-%d-Call id#%" PRIu64 "-Did-%ld", myAddress,
             destAddress, callIdentifier, par("sourceId").longValue());
     EV << "generating packet " << pkname << endl;
 
@@ -537,9 +538,6 @@ void CallApp::newCall() {
             pk2->setCallIdBk(pk->getCallId());
             pk->setCallIdBk(pk2->getCallId());
 
-            if (pk2->getCallId() == 10)
-                printf("");
-
             pk2->setRouteArraySize(r1.size());
             for (unsigned int i = 0; i < r1.size(); i++) {
                 pk2->setRoute(i, r1[i]);
@@ -577,12 +575,12 @@ void CallApp::newCall() {
         //dijFuzzy->getRoute(destAddress, min, cost);
         if (!routes.empty()) {
             // search two routes with less common links
-            int minCommon = 1000;
-            int totalSizes = 10000;
+            unsigned int minCommon = 1000;
+            unsigned int totalSizes = 10000;
             for (unsigned int i = 0 ; i < routes.size()-1;i++)
             {
                 for (unsigned int j = i+1 ; j < routes.size()-1;j++) {
-                    int common = dijkstraks->commonLinks(routes[i],routes[j]);
+                    unsigned int common = dijkstraks->commonLinks(routes[i],routes[j]);
                     if (minCommon > common || (minCommon == common && totalSizes > routes[i].size() + routes[j].size()))
                     {
                         route1 = &routes[i];
@@ -645,7 +643,7 @@ void CallApp::newFlow() {
     pkFlow->setFlowId(flowIdentifier++);
     pkFlow->setType(STARTFLOW);
 
-    sprintf(pkname, "NewFlow-%d-to-%d-Call Id #%lud- Flow Id #%lud -Did-%ld",
+    sprintf(pkname, "NewFlow-%d-to-%d-Call Id #%" PRIu64 "- Flow Id #%" PRIu64 " -Did-%ld",
             myAddress, destAddress, pkFlow->getCallId(), pkFlow->getFlowId(),
             par("sourceId").longValue());
     pkFlow->setName(pkname);
@@ -736,7 +734,7 @@ void CallApp::newReserve(Packet *pk)
     pk->setType(ACEPTED);
     pk->setDestAddr(pk->getSrcAddr());
     pk->setSrcAddr(myAddress);
-    sprintf(pkname, "PkAccepted-%d-to-%d-#%lud-Sid-%d", myAddress,
+    sprintf(pkname, "PkAccepted-%d-to-%d-#%" PRIu64 "-Sid-%d", myAddress,
             pk->getDestAddr(), pk->getCallId(), this->getIndex());
     pk->setName(pkname);
     pk->setDestinationId(pk->getSourceId());
@@ -819,7 +817,7 @@ void CallApp::newAccepted(Packet *pk) {
             pkFlow->setReserve(callInfo->usedBandwith);
             pkFlow->setFlowId(callInfo->flowId);
             pkFlow->setCallId(callInfo->callId);
-            sprintf(pkname, "FlowOn-%d-to-%d-#%lud-Sid-%d-FlowId-%d", myAddress,
+            sprintf(pkname, "FlowOn-%d-to-%d-#%" PRIu64 "-Sid-%d-FlowId-%" PRIu64 "", myAddress,
                     pkFlow->getDestAddr(), pkFlow->getCallId(),
                     this->getIndex(), callInfo->flowId);
             pkFlow->setName(pkname);
@@ -838,7 +836,7 @@ void CallApp::newAccepted(Packet *pk) {
         pk->setDestinationId(pk->getSourceId());
         pk->setSourceId(par("sourceId").longValue());
 
-        sprintf(pkname, "Pkrelease-%d-to-%d-#%lud-Sid-%d", myAddress,
+        sprintf(pkname, "Pkrelease-%d-to-%d-#%" PRIu64 "-Sid-%d", myAddress,
                 pk->getDestAddr(), pk->getCallId(), this->getIndex());
         pk->setName(pkname);
         scheduleAt(simTime() + callDuration->doubleValue(), pk);
@@ -975,7 +973,7 @@ void CallApp::release(Packet *pk) {
                 pkFlow->setFlowId(callInfo->flowId);
                 pkFlow->setReserve(callInfo->usedBandwith);
                 char pkname[60];
-                sprintf(pkname,"FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
+                sprintf(pkname,"FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
                 pkFlow->setName(pkname);
                 CallEvents.insert(std::make_pair(simTime() + TimeOff->doubleValue(), callInfo));
                 send(pkFlow, "out");
@@ -1109,7 +1107,7 @@ void CallApp::procFlowPk(Packet *pk) {
                     pkFlow->setFlowId(callInfo->flowId);
                     pkFlow->setReserve(callInfo->usedBandwith);
                     char pkname[60];
-                    sprintf(pkname,"FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
+                    sprintf(pkname,"FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
                     pkFlow->setName(pkname);
                     if (pkFlow->getDestAddr() == myAddress)
                         throw cRuntimeError("Destination address erroneous");
@@ -1123,8 +1121,8 @@ void CallApp::procFlowPk(Packet *pk) {
                 callInfo->callIdBk = callId;
                 backupCalls.erase(itAux);
                 itAux = activeCalls.find(callId);
-                if (pk->getCallId() == 10)
-                    printf("");
+//                if (pk->getCallId() == 10)
+//                    printf("");
                 if (itAux != activeCalls.end())
                     activeCalls.erase(itAux);
 
@@ -1158,7 +1156,7 @@ void CallApp::procFlowPk(Packet *pk) {
                     pkFlow->setReserve(callInfo->usedBandwith);
                     char pkname[60];
 
-                    sprintf(pkname,"FlowOff-%d-to-%d-CallId#%lud-FlowId#%lud-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
+                    sprintf(pkname,"FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
                     pkFlow->setName(pkname);
                     if (pkFlow->getDestAddr() == myAddress)
                         throw cRuntimeError("Destination address erroneous");

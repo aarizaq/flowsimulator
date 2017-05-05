@@ -15,7 +15,7 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#include <failureModule.h>
+#include "failureModule.h"
 #include <stdlib.h>     /* atoi */
 
 Define_Module(FailureModule);
@@ -199,7 +199,7 @@ LinkId FailureModule::getNode(cXMLAttributeMap attributes)
             }
         }
 
-        if (remoteNodeId == -1)
+        if (remoteNodeIndex == -1)
             throw cRuntimeError("No existe enlace entre nodos");
         return std::make_pair(nodeId, remoteNodeId);
     }

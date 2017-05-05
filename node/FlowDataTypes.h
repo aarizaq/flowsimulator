@@ -20,6 +20,10 @@ enum CallState
     UNKNOWN = -1, CALLUP, END
 };
 
+enum SimulationMode {
+    FLOWMODE, CALLMODE, PACKETMODE
+};
+
 enum FlowAdmisionModes
 {
     DISCARD, // discard the flow if not enough bandwith

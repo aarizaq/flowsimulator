@@ -24,6 +24,7 @@ using namespace omnetpp;
 class CallApp : public cSimpleModule, public cListener
 {
 protected:
+    SimulationMode simulationMode = FLOWMODE;
     enum RoutingType {
         HOPBYHOP,
         SOURCEROUTING,

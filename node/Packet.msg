@@ -42,6 +42,7 @@ enum PacketCode
     CROUTEFLOWEND = 13;
     RESERVEBK = 14;
     RELEASEBREAK = 15;
+    DATATYPE = 16; // the simulator works in packet mode. 
 }
 
 message PendingRelease

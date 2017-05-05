@@ -292,7 +292,7 @@ void DijkstraKshortest::run()
             throw cRuntimeError("node not found in routeMap");
 
         if (elem.iD != rootNode) {
-            if (it->second.size() > elem.idx && it->second[elem.idx].label == perm)
+            if ((int)it->second.size() > elem.idx && it->second[elem.idx].label == perm)
                 continue; // set
             if ((int) it->second.size() == K_LIMITE) {
                 bool continueLoop = true;
@@ -456,7 +456,7 @@ void DijkstraKshortest::runUntil(const NodeId &target)
             throw cRuntimeError("node not found in routeMap");
 
         if (elem.iD != rootNode) {
-            if (it->second.size() > elem.idx && it->second[elem.idx].label == perm)
+            if ((int)it->second.size() > elem.idx && it->second[elem.idx].label == perm)
                 continue; // set
             if ((int) it->second.size() == K_LIMITE) {
                 bool continueLoop = true;
@@ -630,7 +630,7 @@ void DijkstraKshortest::getRouteMapK(const NodeId &nodeId, Kroutes &routes)
 }
 
 
-int DijkstraKshortest::commonLinks(const Route &S, const Route &Sp)
+unsigned int DijkstraKshortest::commonLinks(const Route &S, const Route &Sp)
 {
     int common = 0;
     for (unsigned int i = 1 ; i < S.size(); i++) {

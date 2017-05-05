@@ -19,6 +19,8 @@ using namespace omnetpp;
 class FlowRouting : public cSimpleModule, public cListener
 {
 private:
+    SimulationMode simulationMode = FLOWMODE;
+
     // configuration parameters
     FlowAdmisionModes flowAdmisionMode = DISCARD; // if true and the bandwidth is busy the flow is lost, if false, the flows share in proportional the bandwidth
     double reserveCall = 0; // quantity that determine if flows not assigned to call must be accepted or not, 0 implies that they must accept it of possible, not reservation, 1 only accept call flows

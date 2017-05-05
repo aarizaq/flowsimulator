@@ -28,10 +28,11 @@ inline bool operator <(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
             return (x.cost < y.cost);
         return (x.cost2 > y.cost2);
     }
-    if (x.m == Dijkstra::shortestwidest)
+    if (x.m == Dijkstra::shortestwidest) {
         if (x.cost2 != y.cost2)
             return (x.cost2 > y.cost2);
         return (x.cost < y.cost);
+    }
     return (x.cost < y.cost);
 }
 
@@ -42,10 +43,11 @@ inline bool operator >(const Dijkstra::SetElem& x, const Dijkstra::SetElem& y)
             return (x.cost > y.cost);
         return (x.cost2 < y.cost2);
     }
-    if (x.m == Dijkstra::shortestwidest)
+    if (x.m == Dijkstra::shortestwidest) {
         if (x.cost2 != y.cost2)
             return (x.cost2 < y.cost2);
         return (x.cost > y.cost);
+    }
     return (x.cost > y.cost);
 }
 
@@ -1458,7 +1460,7 @@ void Dijkstra::discoverPartitionedLinks(std::vector<NodeId> &pathNode, const Lin
 {
 
     LinkArray topoAux = topo;
-    for (int i = 0; i < pathNode.size() - 1; i++) {
+    for (unsigned int i = 0; i < pathNode.size() - 1; i++) {
         auto it1 = topoAux.find(pathNode[i]);
         if (it1 == topoAux.end())
             throw cRuntimeError("Node not found %i", pathNode[i]);

@@ -16,7 +16,7 @@
 #ifndef FINITEQEUEUE_H_
 #define FINITEQEUEUE_H_
 
-#include <BaseFlowDistribution.h>
+#include "BaseFlowDistribution.h"
 
 class FiniteQueue : public BaseFlowDistribution
 {

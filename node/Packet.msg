@@ -63,6 +63,7 @@ packet Base
     int sourceId;
     int destinationId;
     uint64_t sequence;
+    bool last = false;
     int type @enum(PacketCode);
 }
 

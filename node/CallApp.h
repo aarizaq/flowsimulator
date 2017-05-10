@@ -41,10 +41,12 @@ protected:
 private:
     // configuration
     int myAddress;
+    bool packetMode = false;
     std::vector<int> destAddresses;
     cPar *callArrival = nullptr;
     cPar *callReserve = nullptr;
     cPar *callDuration = nullptr;
+    cPar *packetSize = nullptr;
 
     bool generateFlow;
     cPar *TimeOn = nullptr;
@@ -53,6 +55,10 @@ private:
     cPar *flowArrival = nullptr;
     cPar *flowDuration = nullptr;
     cPar *flowUsedBandwith = nullptr;
+    cPar *flowPacketSize = nullptr;
+    //
+
+
 
     // identifiers
     static uint64_t callIdentifier;
@@ -85,6 +91,8 @@ private:
         simtime_t nextEvent;
         simtime_t startOn;
         simtime_t startOnRec;
+        simtime_t interArrivalTime;
+        uint64_t paketSize;
     };
 
     struct FlowStat
@@ -112,6 +120,8 @@ private:
         long double acumulateRec = 0;
         simtime_t startOn;
         simtime_t startOnRec;
+        simtime_t interArrivalTime;
+        uint64_t paketSize;
     };
 
     struct FlowEvent
@@ -121,6 +131,7 @@ private:
         uint64_t flowId = 0;
         uint64_t usedBandwith = 0;
         simtime_t startOn;
+        simtime_t interArrivalTime;
     };
 
     std::map<FlowIdentification,FlowStat> flowStatistics;
@@ -128,6 +139,9 @@ private:
     typedef std::map<int, unsigned long int> SequenceTable;
     std::multimap<simtime_t, CallInfo*> CallEvents;
     std::multimap<simtime_t, FlowEvent*> FlowEvents;
+    std::multimap<simtime_t, CallInfo*> CallPacketsEvents;
+    std::multimap<simtime_t, FlowEvent*> FlowPacketsEvents;
+
     DijkstraFuzzy *dijFuzzy = nullptr;
     Dijkstra *dijkstra = nullptr;
     DijkstraKshortest *dijkstraks = nullptr;
@@ -152,6 +166,16 @@ private:
     void storeCallStatistics(const CallInfo *callInfo);
     static simsignal_t actualizationSignal;
     static simsignal_t rcvdPk;
+
+    virtual void   newCallFlow(CallInfo *callInfo, const uint64_t  &bw);
+    virtual double startCallFlow(CallInfo *callInfo, Packet *pkFlow);
+    virtual double endCallFlow(CallInfo *callInfo, Packet *pkFlow);
+    virtual double startCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & elem);
+    virtual double endCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & elem);
+    virtual void newCallPacket(CallInfo *callInfo);
+
+    virtual void  endFlow(FlowEvent *flowEvent);
+
 public:
     CallApp();
     virtual ~CallApp();

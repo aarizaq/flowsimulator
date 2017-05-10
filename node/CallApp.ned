@@ -15,12 +15,12 @@ package node;
 simple CallApp like IApp
 {
     parameters:
-        bool useHyperbolic = default(false);// use lineal or hyperbolic
         int address;  // local node address
         string destAddresses = default("");  // destination addresses
         int sourceId = default(0);
         int destinationId = default(0);
-        string RoutingType @enum("HopByHop","SourceRouting","Disjoint","BackupRouting","SourceRoutingFuzzy","Sw","Ws","SwFuzzy","WsFuzzy") = default("HopByHop");
+        bool packetMode = default(false); // if true the source generates packets instead flow events
+        
         volatile double callArrival @unit(s) = default(exponential(20s)); // time between generating packets
         volatile double callDuration @unit(s) = default(exponential(60s)); // time between generating packets
         volatile double callReserve @unit(bps) = default(0bps);  //
@@ -30,16 +30,24 @@ simple CallApp like IApp
         volatile double TimeOn @unit(s) = default(exponential(1s)); // time between generating packets
         volatile double TimeOff @unit(s) = default(exponential(1s)); // time between generating packets, can be 0 in in this case the flow can change the bandwith used
         volatile double usedBandwith @unit(bps);  //
-        
+        volatile int packetSize @unit(b) = default(1000b);  // The inter arrival packet is computed in base to usedBandwith
+
         // independent flows, flows that aren't associated to calls
         bool independentFlows = default(false);
         volatile double flowArrival @unit(s) = default(exponential(1s));
         volatile double flowDuration @unit(s) = default(exponential(1s));
         volatile double flowUsedBandwith @unit(bps);  //
+        volatile int flowPacketSize @unit(b) = default(1000b);  // The inter arrival packet is computed in base to flowUsedBandwith
+
                 
-        
+// routing parameters.
+// Routing type
+
+        string RoutingType @enum("HopByHop","SourceRouting","Disjoint","BackupRouting","SourceRoutingFuzzy","Sw","Ws","SwFuzzy","WsFuzzy") = default("HopByHop");
+
+        bool useHyperbolic = default(false); // use lineal or hyperbolic in SourceRouting or SourceRoutingFuzzy type               
         bool instValue = default(false); // use instantaneous value instead of the mean value
-        bool fuzzyCorregido = default(false);
+        bool fuzzyCorregido = default(false); 
                 
         string levelsValues = default(""); // number of level in the asignation of cost, "30 60 90" changes in the cost at 30% residual, 60 % residual and 90% residual    
         string santionValues = default("1 5 10");// only used if levelsValues has values, in this case the size of this must be equal in both 

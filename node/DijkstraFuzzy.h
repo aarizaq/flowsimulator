@@ -25,6 +25,9 @@
 #include <algorithm>
 #include <omnetpp.h>
 
+
+#define OtherCost
+
 using namespace omnetpp;
 
 typedef int NodeId;
@@ -45,7 +48,7 @@ protected:
 public:
     enum Method
     {
-        basic, widestshortest, shortestwidest
+        basic, widestshortest, shortestwidest,otherCost
     };
 
 protected :
@@ -207,7 +210,12 @@ public:
             lhs += rhs;
             return lhs;
         }
-        const double exp() const {return ((1 - DijkstraFuzzy::alpha) * cost1 + cost2 + DijkstraFuzzy::alpha * cost3);}
+        const double exp() const {
+#ifdef OtherCost
+            return ( cost1 + 4 * cost2 + cost3);}
+#else
+            return ((1 - DijkstraFuzzy::alpha) * cost1 + cost2 + DijkstraFuzzy::alpha * cost3);}
+#endif
     };
     class SetElem
     {

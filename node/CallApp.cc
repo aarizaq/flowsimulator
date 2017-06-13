@@ -182,7 +182,7 @@ void CallApp::readTopo()
 
 void CallApp::rescheduleEvent()
 {
-    if (CallEvents.empty() && FlowEvents.empty()) {
+    if (CallEvents.empty() && FlowEvents.empty() && CallPacketsEvents.empty() && FlowPacketsEvents.empty()) {
         if (nextEvent->isScheduled())
             cancelEvent(nextEvent);
         return;
@@ -190,12 +190,23 @@ void CallApp::rescheduleEvent()
 
     simtime_t min1 = SimTime::getMaxTime();
     simtime_t min2 = SimTime::getMaxTime();
+    simtime_t min3 = SimTime::getMaxTime();
+    simtime_t min4 = SimTime::getMaxTime();
 
     if (!CallEvents.empty())
         min1 = CallEvents.begin()->first;
     if (!FlowEvents.empty())
         min2 = FlowEvents.begin()->first;
+    if (!CallPacketsEvents.empty())
+        min3 = CallPacketsEvents.begin()->first;
+    if (!FlowPacketsEvents.empty())
+        min4 = FlowPacketsEvents.begin()->first;
+
     simtime_t min = min1<min2?min1:min2;
+    if (min > min3)
+        min = min3;
+    if (min>min4)
+        min = min4;
 
     if (min<simTime())
         throw cRuntimeError("Planing error");

@@ -116,12 +116,26 @@ void CallApp::readTopo()
         cTopology::Node *node = topo.getNode(i);
         int address = node->getModule()->par("address");
         for (int j = 0; j < node->getNumOutLinks(); j++) {
+            int addressAux = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
+            if (node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate() > maxCapacity)
+                maxCapacity = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();
+        }
+    }
+
+
+    for (int i = 0; i < topo.getNumNodes(); i++) {
+        cTopology::Node *node = topo.getNode(i);
+        int address = node->getModule()->par("address");
+
+        for (int j = 0; j < node->getNumOutLinks(); j++) {
 
             int addressAux = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
 
-            double minResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();;
-            double meanResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();;
-            double maxResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();;
+            double minResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();
+            double meanResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();
+            double maxResidual = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate();
+
+            double alpha = node->getLinkOut(j)->getLocalGate()->getTransmissionChannel()->getNominalDatarate()/maxCapacity;
 
             if (residual) {
                 if (minResidual < 0.0001)
@@ -140,9 +154,19 @@ void CallApp::readTopo()
                     maxResidual = 1 / maxResidual;
             } else {
                 // Usar funciones lineales  o hiperbólicas?
-                minResidual = 1;
-                meanResidual = 1;
-                maxResidual = 1;
+
+                if (useAlpha) {
+                    minResidual = 1/alpha;
+                    meanResidual = 1/alpha;
+                    maxResidual = 1/alpha;
+                }
+                else {
+                    minResidual = 1;
+                    meanResidual = 1;
+                    maxResidual = 1;
+                }
+
+
             }
             dijFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
             dijkstra->addEdge(address, addressAux, minResidual,1);
@@ -1353,6 +1377,8 @@ void CallApp::initialize()
         throw cRuntimeError("Size of levelsValues and santionValues are different");
 
 
+    useAlpha = par("useAlpha");
+
 
     nextEvent = new cMessage("NewEvent");
     readTopo();
@@ -1534,6 +1560,16 @@ void CallApp::procActualize(Actualize *pkt)
                 meanResidual = (linkData.mean / linkData.nominal) * overCost;
                 maxResidual = (linkData.max / linkData.nominal) * overCost;
                 instResidual = linkData.actual / linkData.nominal * overCost;
+
+
+                if (useAlpha) {
+                    double alpha = linkData.nominal /maxCapacity;
+                    minResidual /= alpha;
+                    meanResidual /= alpha;
+                    maxResidual /= alpha;
+                    instResidual /= alpha;
+                }
+
             }
 
             if (minResidual == 0)

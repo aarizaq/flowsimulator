@@ -28,7 +28,9 @@ void FlowRouting::recordOccupation(PortData &port, const ChangeBw &val)
         port.accmin = val.value;
     if (port.accmax < val.value)
         port.accmax = val.value;
-    port.accmean +=  port.lastC.value * SIMTIME_DBL(simTime() - port.lastC.instant);
+    double auxVal = port.lastC.value * SIMTIME_DBL(simTime() - port.lastC.instant);
+    port.accmean +=  auxVal;
+    port.varSamples.push_back(auxVal);
     port.lastC = val;
 }
 
@@ -39,6 +41,7 @@ FlowRouting::~FlowRouting()
     callInfomap.clear();
     portDataArray.clear();
 }
+
 void FlowRouting::computeUsedBw()
 {
     simtime_t interval = simTime() - computationInterval;
@@ -51,6 +54,7 @@ void FlowRouting::computeUsedBw()
             elem.accmax = 0;
             elem.accmin = 1e300;
             elem.accmean = 0;
+            elem.varSamples.clear();
             elem.lastC.instant = simTime();
         }
         return;
@@ -101,17 +105,30 @@ void FlowRouting::computeUsedBw()
         elem.min = min;
         elem.max = max;
 #endif
-        elem.accmean +=  elem.lastC.value * SIMTIME_DBL((simTime() - elem.lastC.instant));
+        double val = elem.lastC.value * SIMTIME_DBL((simTime() - elem.lastC.instant));
+        elem.accmean +=  val;
+        elem.varSamples.push_back(val);
         elem.mean = elem.accmean/interval.dbl();
         if (elem.lastC.value < elem.accmin)
             elem.accmin = elem.lastC.value;
         if (elem.lastC.value > elem.accmax)
             elem.accmax = elem.lastC.value;
+
         elem.min = elem.accmin;
         elem.max = elem.accmax;
+
+        for (auto elem2:elem.varSamples) {
+            double auxVal = (elem2 - elem.accmean)/interval.dbl();
+            elem.var = (auxVal * auxVal);
+        }
+        if (elem.varSamples.size() > 1)
+            elem.var /= (elem.varSamples.size()-1);
+        else
+            elem.var = 0;
         elem.accmean = 0;
         elem.accmax = 0;
         elem.accmin = 1e300;
+        elem.varSamples.clear();
         elem.lastC.instant = simTime();
     }
     computationInterval = simTime();

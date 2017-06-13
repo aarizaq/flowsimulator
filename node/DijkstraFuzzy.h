@@ -26,7 +26,7 @@
 #include <omnetpp.h>
 
 
-#define OtherCost
+//#define OtherCost
 
 using namespace omnetpp;
 

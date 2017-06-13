@@ -58,6 +58,9 @@ private:
     cPar *flowPacketSize = nullptr;
     //
 
+    double maxCapacity = 0;
+    bool useAlpha = false;
+
 
 
     // identifiers

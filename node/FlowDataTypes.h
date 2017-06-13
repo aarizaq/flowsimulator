@@ -192,10 +192,12 @@ struct PortData
     double mean = 0;
     double min = 0;
     double max = 0;
+    double var = 0;
     // std::vector<ChangeBw> changeRegister;
     double accmean = 0;
     double accmin = 1e300;
     double accmax = 0;
+    std::vector<double> varSamples;
     ChangeBw lastC;
 };
 

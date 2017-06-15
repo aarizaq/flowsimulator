@@ -18,6 +18,7 @@ simple FlowRouting
         volatile double actualizeState @unit(s)= default(60s);
         volatile double breakRelease  @unit(s)= default(0);
         bool actualizeWithSignals = default(false);
+        bool packetMode = default(false); // if true the source generates packets instead flow events
         double minimumTimeActualize @unit(s) = default(60s); // minimum time between two actualization messages
         string flowClass @enum("","Discard","StoreAndForward","FiniteQueue") = default(""); // como se comporta el router cuando está lleno el canal, como tira los datos
         int storeAndForwardSize = default(-1);

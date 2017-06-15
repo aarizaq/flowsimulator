@@ -209,8 +209,9 @@ void FlowRouting::initialize()
 
     const char *flowClass = par("flowClass").stringValue();
     if (strcmp(flowClass, "") != 0) {
-        if ((strcmp(flowClass, "Discard") == 0) && (strcmp(flowClass, "StoreAndForward") == 0))
+        if ((strcmp(flowClass, "Discard") != 0) && (strcmp(flowClass, "StoreAndForward") != 0))
             flowDist = check_and_cast<BaseFlowDistribution*>(createOne(flowClass));
+
         if (strcmp(flowClass, "Discard") == 0)
             flowAdmisionMode = DISCARD;
         if (strcmp(flowClass, "StoreAndForward") == 0)
@@ -218,7 +219,10 @@ void FlowRouting::initialize()
         if (strcmp(flowClass, "FiniteQueue") == 0)
             flowAdmisionMode = FINITEQUEUE;
     }
-    flowAdmisionMode = DISCARD;
+    //flowAdmisionMode = DISCARD;
+
+    if (par("packetMode"))
+        simulationMode = PACKETMODE;
 
     actualizeTimer = new cMessage("actualize timer");
     //computeBwTimer = new cMessage("actualize bw timer");
@@ -237,8 +241,11 @@ bool FlowRouting::actualize(Actualize *other)
         simtime_t now = simTime();
         if (SIMTIME_DBL(now - lastTimeActualize) < par("minimumTimeActualize").doubleValue())
             return false;
-        cancelEvent(actualizeTimer);
     }
+
+    if (actualizeTimer->isScheduled())
+        cancelEvent(actualizeTimer);
+
     char pkname[40];
     sprintf(pkname, "Actualize-%d", myAddress);
     Actualize *pkt = new Actualize(pkname);
@@ -449,8 +456,8 @@ void FlowRouting::procBroadcast(Base *pkbase)
         pkbase = packets.back();
         packets.pop_back();
     }
-
-    if (!actualize(dynamic_cast<Actualize*>(pkbase))) {// in case that actualize take the control the method will delete the packet
+    Actualize* actPk = dynamic_cast<Actualize*>(pkbase);
+    if (actPk == nullptr || (actPk != nullptr && !actualize(actPk))) {
         for (auto elem : neighbors) {
             if (gateIndex != elem.second.port && elem.second.state == UP)
                 send(pkbase->dup(), "out", elem.second.port);
@@ -1184,7 +1191,10 @@ void FlowRouting::checkPendingList()
                             pkStartFlow->getDestAddr(), pkStartFlow->getCallId(), pkStartFlow->getFlowId(), pkStartFlow->getDestinationId());
                     pkStartFlow->setName(pkname);
                 }
-                send(pkStartFlow, "out", it->port);
+                if (simulationMode == FLOWMODE)
+                    send(pkStartFlow, "out", it->port);
+                else
+                    delete pkStartFlow;
                 scheduleAt(simTime()+delay,it->endMsg);
                 it = delayedFlows.erase(it);
             }
@@ -1301,7 +1311,10 @@ void FlowRouting::checkPendingList()
                             pkStartFlow->getDestAddr(), pkStartFlow->getCallId(), pkStartFlow->getFlowId(), pkStartFlow->getDestinationId());
                     pkStartFlow->setName(pkname);
                 }
-                send(pkStartFlow, "out", it->port);
+                if (simulationMode == FLOWMODE)
+                    send(pkStartFlow, "out", it->port);
+                else
+                    delete pkStartFlow;
                 it = pendingFlows.erase(it);
             }
             else
@@ -1742,7 +1755,7 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
                     pkt->setCallId((*itAux)->identify.callId());
                     pkt->setFlowId((*itAux)->identify.flowId());
                     pkt->setSourceId((*itAux)->identify.srcId());
-                    pkt->setDestAddr((*itAux)->destId);
+                    pkt->setDestAddr((*itAux)->dest);
                     pkt->setReserve((*itAux)->used);
                     pkt->setType(FLOWCHANGE);
                     if (!(*itAux)->sourceRouting.empty()) {
@@ -2197,6 +2210,16 @@ void FlowRouting::handleMessage(cMessage *msg)
 
     Base *pkbase = check_and_cast<Base *>(msg);
 
+
+
+    if ((pkbase->getType() == STARTFLOW || pkbase->getType() == CROUTEFLOWSTART || pkbase->getType() == FLOWCHANGE || pkbase->getType() == ENDFLOW || pkbase->getType() == CROUTEFLOWEND) && simulationMode != FLOWMODE) {
+            throw cRuntimeError("Packet of type flow  but simulator not in Flow mode");
+    }
+
+    if (pkbase->getType() == DATATYPE && simulationMode != PACKETMODE) {
+        throw cRuntimeError("Packet of type data but simulator not in Packet mode");
+    }
+
     if (strcmp(pkbase->getArrivalGate()->getName(), "localIn") == 0) {
         pkbase->setSrcAddr(myAddress);
         auto it = inverseSourceIdGate.find(msg->getArrivalGate()->getIndex());
@@ -2309,14 +2332,10 @@ void FlowRouting::handleMessage(cMessage *msg)
             itCallInfo->second.state = CALLUP;
         }
         else if (pk->getType() == STARTFLOW || pk->getType() == CROUTEFLOWSTART) {
-            if (simulationMode != FLOWMODE)
-                throw cRuntimeError("Packet of type flow  but simulator not in Flow mode");
             if (!procStartFlow(pk, portForward, portInput))
                 return; // nothing more to do
         }
         else if (pk->getType() == FLOWCHANGE) {
-            if (simulationMode != FLOWMODE)
-                throw cRuntimeError("Packet of type flow  but simulator not in Flow mode");
             if (!procFlowChange(pk, portForward, portInput))
                 return; // nothing more to do
         }
@@ -2325,8 +2344,6 @@ void FlowRouting::handleMessage(cMessage *msg)
                 return;  // nothing more to do
         }
         else if (pk->getType() == DATATYPE) {
-            if (simulationMode != PACKETMODE)
-                throw cRuntimeError("Packet of type data but simulator not in Packet mode");
             // Process data packet.
             if (!procDataType(pk, portForward, portInput))
                 return;  // nothing more to do

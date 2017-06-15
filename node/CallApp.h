@@ -85,7 +85,7 @@ private:
 
     struct FlowData
     {
-        uint64_t flowId;
+        uint64_t flowId = -1;
         uint64_t usedBandwith = 0;
         uint64_t reservedBandwith = 0;
         uint64_t recBandwith = 0;
@@ -95,7 +95,7 @@ private:
         simtime_t startOn;
         simtime_t startOnRec;
         simtime_t interArrivalTime;
-        uint64_t paketSize;
+        uint64_t paketSize = 0;
     };
 
     struct FlowStat
@@ -110,7 +110,7 @@ private:
     {
         int dest = -1;
         int sourceId = 0;
-        uint64_t callId;
+        uint64_t callId = -1;
         uint64_t callIdBk = 0;
         uint64_t flowId = 0;
         State state = WAITCONFIRMATION;
@@ -124,7 +124,7 @@ private:
         simtime_t startOn;
         simtime_t startOnRec;
         simtime_t interArrivalTime;
-        uint64_t paketSize;
+        uint64_t paketSize = 0;
     };
 
     struct FlowEvent
@@ -135,6 +135,7 @@ private:
         uint64_t usedBandwith = 0;
         simtime_t startOn;
         simtime_t interArrivalTime;
+        uint64_t paketSize;
     };
 
     std::map<FlowIdentification,FlowStat> flowStatistics;

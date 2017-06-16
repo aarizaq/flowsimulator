@@ -1669,20 +1669,15 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
     auto itCallInfo = callInfomap.end();
     if (flowInfoInputPtr->identify.callId() != 0)
         itCallInfo = callInfomap.find(flowInfoInputPtr->identify.callId());
-
-    bool inPending = false;
-    for (auto elem : pendingFlows) {
-        if (elem.identify == flowInfoInputPtr->identify) {
-            inPending = true;
-            break;
-        }
-    }
+    auto itAux = pendingFlows.end();
 
     switch (flowAdmisionMode) {
     case STOREANDFORWARD:
     case DISCARD:
-        if (!inPending)
+        itAux = std::find(pendingFlows.begin(), pendingFlows.end(),*flowInfoInputPtr);
+        if (itAux == pendingFlows.end())
             pendingFlows.push_back(*flowInfoInputPtr);
+
         // delete the output flow if exist and send end flow
         if (flowInfoOutputPtr != nullptr) {
             if (itCallInfo != callInfomap.end()) {

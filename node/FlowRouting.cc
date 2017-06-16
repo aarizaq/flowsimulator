@@ -1670,10 +1670,19 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
     if (flowInfoInputPtr->identify.callId() != 0)
         itCallInfo = callInfomap.find(flowInfoInputPtr->identify.callId());
 
+    bool inPending = false;
+    for (auto elem : pendingFlows) {
+        if (elem.identify == flowInfoInputPtr->identify) {
+            inPending = true;
+            break;
+        }
+    }
+
     switch (flowAdmisionMode) {
     case STOREANDFORWARD:
     case DISCARD:
-        pendingFlows.push_back(*flowInfoInputPtr);
+        if (!inPending)
+            pendingFlows.push_back(*flowInfoInputPtr);
         // delete the output flow if exist and send end flow
         if (flowInfoOutputPtr != nullptr) {
             if (itCallInfo != callInfomap.end()) {
@@ -1690,28 +1699,34 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
                 outputFlows.erase(itFlow);
             }
             // send end flow
-            Packet * pkt = new Packet();
-            pkt->setSrcAddr(flowInfoInputPtr->identify.src());
-            pkt->setCallId(flowInfoInputPtr->identify.callId());
-            pkt->setFlowId(flowInfoInputPtr->identify.flowId());
-            pkt->setSourceId(flowInfoInputPtr->identify.srcId());
-            pkt->setDestAddr(flowInfoInputPtr->destId);
-            pkt->setReserve(flowInfoInputPtr->used);
-            pkt->setType(ENDFLOW);
-            if (!(flowInfoInputPtr->sourceRouting.empty())) {
-                pkt->setRouteArraySize(flowInfoInputPtr->sourceRouting.size());
-                for (unsigned int i = 0;
-                        i < flowInfoInputPtr->sourceRouting.size(); i++)
-                    pkt->setRoute(i, flowInfoInputPtr->sourceRouting[i]);
-            }
+            if (simulationMode == FLOWMODE) {
+                Packet * pkt = new Packet();
+                pkt->setSrcAddr(flowInfoInputPtr->identify.src());
+                pkt->setCallId(flowInfoInputPtr->identify.callId());
+                pkt->setFlowId(flowInfoInputPtr->identify.flowId());
+                pkt->setSourceId(flowInfoInputPtr->identify.srcId());
+                pkt->setDestAddr(flowInfoInputPtr->destId);
+                pkt->setReserve(flowInfoInputPtr->used);
+                pkt->setType(ENDFLOW);
+                if (!(flowInfoInputPtr->sourceRouting.empty())) {
+                    pkt->setRouteArraySize(
+                            flowInfoInputPtr->sourceRouting.size());
+                    for (unsigned int i = 0;
+                            i < flowInfoInputPtr->sourceRouting.size(); i++)
+                        pkt->setRoute(i, flowInfoInputPtr->sourceRouting[i]);
+                }
 
-            if (hasGUI()) {
-                char pkname[100];
-                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
-                        pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
-                pkt->setName(pkname);
+                if (hasGUI()) {
+                    char pkname[100];
+                    sprintf(pkname,
+                            "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i",
+                            pkt->getSrcAddr(), pkt->getDestAddr(),
+                            pkt->getCallId(), pkt->getFlowId(),
+                            pkt->getDestinationId());
+                    pkt->setName(pkname);
+                }
+                send(pkt, "out", portForward);
             }
-            send(pkt, "out", portForward);
         }
         flowInfoOutputPtr = nullptr;
         return false;
@@ -1744,39 +1759,42 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
 
                 recordOccupation(portDataArray[portForward], val);
                 // enviar mensajes de actualización del flujo.
-                for (auto itAux = listFlowsToModify.begin(); itAux != listFlowsToModify.end(); ++itAux) {
-                    //
-                    if ((*itAux)->identify == flowInfoInputPtr->identify) {
-                        // actualize use in the packet
-                        continue;
+                if (simulationMode == FLOWMODE) {
+                    for (auto itAux = listFlowsToModify.begin(); itAux != listFlowsToModify.end(); ++itAux) {
+                        //
+                        if ((*itAux)->identify == flowInfoInputPtr->identify) {
+                            // actualize use in the packet
+                            continue;
+                        }
+                        Packet * pkt = new Packet();
+                        pkt->setSrcAddr((*itAux)->identify.src());
+                        pkt->setCallId((*itAux)->identify.callId());
+                        pkt->setFlowId((*itAux)->identify.flowId());
+                        pkt->setSourceId((*itAux)->identify.srcId());
+                        pkt->setDestAddr((*itAux)->dest);
+                        pkt->setReserve((*itAux)->used);
+                        pkt->setType(FLOWCHANGE);
+                        if (!(*itAux)->sourceRouting.empty()) {
+                            pkt->setRouteArraySize((*itAux)->sourceRouting.size());
+                            for (unsigned int i = 0; i < (*itAux)->sourceRouting.size(); i++)
+                                pkt->setRoute(i, (*itAux)->sourceRouting[i]);
+                        }
+                        if (hasGUI()) {
+                            char pkname[100];
+                            sprintf(pkname,
+                                    "FlowChangeL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i",
+                                    pkt->getSrcAddr(), pkt->getDestAddr(),
+                                    pkt->getCallId(), pkt->getFlowId(),
+                                    pkt->getDestinationId());
+                            pkt->setName(pkname);
+                        }
+                        send(pkt, "out", portForward);
                     }
-                    Packet * pkt = new Packet();
-                    pkt->setSrcAddr((*itAux)->identify.src());
-                    pkt->setCallId((*itAux)->identify.callId());
-                    pkt->setFlowId((*itAux)->identify.flowId());
-                    pkt->setSourceId((*itAux)->identify.srcId());
-                    pkt->setDestAddr((*itAux)->dest);
-                    pkt->setReserve((*itAux)->used);
-                    pkt->setType(FLOWCHANGE);
-                    if (!(*itAux)->sourceRouting.empty()) {
-                        pkt->setRouteArraySize((*itAux)->sourceRouting.size());
-                        for (unsigned int i = 0;
-                                i < (*itAux)->sourceRouting.size(); i++)
-                            pkt->setRoute(i, (*itAux)->sourceRouting[i]);
-                    }
-                    if (hasGUI()) {
-                        char pkname[100];
-                        sprintf(pkname, "FlowChangeL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
-                                pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
-                        pkt->setName(pkname);
-                    }
-                    send(pkt, "out", portForward);
                 }
             }
         }
         else
-            throw cRuntimeError("Not definition present \"flowClass\": %s",
-                    par("flowClass").stringValue());
+            throw cRuntimeError("Not definition present \"flowClass\": %s", par("flowClass").stringValue());
     }
     return true;
 }
@@ -2149,7 +2167,8 @@ bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
 void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId, const int & portForward)
 {
     // check if event is a release type event.
-    bool releaseResources = pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == ENDFLOW || pk->getType() == CROUTEFLOWEND || pk->getType() == RELEASEBREAK; // end a call
+    bool releaseResources = pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == ENDFLOW || pk->getType() == CROUTEFLOWEND || pk->getType() == RELEASEBREAK || (pk->getType()== DATATYPE && pk->getLast()); // end a call
+
 
     if (destAddr == myAddress) {
         EV << "local delivery of packet " << pk->getName() << endl;

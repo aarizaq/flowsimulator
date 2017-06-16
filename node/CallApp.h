@@ -14,6 +14,7 @@
 #include "FlowDataTypes.h"
 #include "Packet_m.h"
 #include "DijktraKShortest.h"
+#include <time.h>
 
 using namespace omnetpp;
 
@@ -57,6 +58,7 @@ private:
     cPar *flowUsedBandwith = nullptr;
     cPar *flowPacketSize = nullptr;
     //
+    time_t initTime;
 
     double maxCapacity = 0;
     bool useAlpha = false;
@@ -198,6 +200,7 @@ protected:
     virtual void release(Packet *);
     virtual void procFlowPk(Packet *);
     virtual void procActualize(Actualize *);
+    virtual void getNodesAddress(const char *destAddressesPar, std::vector<int> &listAddres);
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;

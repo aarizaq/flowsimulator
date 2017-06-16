@@ -1343,6 +1343,33 @@ void CallApp::procFlowPk(Packet *pk) {
     delete pk;
 }
 
+void CallApp::getNodesAddress(const char *destAddressesPar, std::vector<int> &listAddres)
+{
+    listAddres.clear();
+    const char *token;
+    if (strcmp(destAddressesPar,"any")==0) {
+        cTopology topo("topo");
+        std::vector<std::string> nedTypes;
+        nedTypes.push_back(getParentModule()->getNedTypeName());
+        topo.extractByNedTypeName(nedTypes);
+        for (int i = 0; i < topo.getNumNodes(); i++) {
+            cTopology::Node *node = topo.getNode(i);
+            int destAddr = node->getModule()->par("address");
+            if (destAddr != myAddress)
+                listAddres.push_back(destAddr);
+       }
+    }
+    else {
+        cStringTokenizer tokenizer(destAddressesPar);
+        while ((token = tokenizer.nextToken()) != NULL)
+        {
+            int destAddr = atoi(token);
+            if (destAddr != myAddress)
+                destAddresses.push_back(atoi(token));
+        }
+    }
+}
+
 void CallApp::initialize()
 {
     myAddress = par("address");
@@ -1373,15 +1400,8 @@ void CallApp::initialize()
     WATCH_MAP(receivedBytes);
     WATCH_MAP(sendBytes);
 
-    const char *destAddressesPar = par("destAddresses");
-    cStringTokenizer tokenizer(destAddressesPar);
-    const char *token;
-    while ((token = tokenizer.nextToken()) != NULL)
-    {
-        int destAddr = atoi(token);
-        if (destAddr != myAddress)
-            destAddresses.push_back(atoi(token));
-    }
+
+    getNodesAddress(par("destAddresses"),destAddresses);
 
     generateCall = new cMessage("nextCall");
     if (!destAddresses.empty())
@@ -1415,6 +1435,7 @@ void CallApp::initialize()
 
     const char *levelsValues = par("levelsValues");
     cStringTokenizer tokenizerLevesl(levelsValues);
+    const char *token;
 
     while ((token = tokenizerLevesl.nextToken()) != NULL)
     {
@@ -1444,6 +1465,8 @@ void CallApp::initialize()
 
     // register in the root module to receive the actualization of all nodes.
     cSimulation::getActiveSimulation()->getSystemModule()->subscribe(actualizationSignal,this);
+
+    initTime = time(nullptr);
 }
 
 void CallApp::handleMessage(cMessage *msg)
@@ -1559,6 +1582,8 @@ void CallApp::finish()
     recordScalar("Total calls received",callReceived);
 
     recordScalar("Total calls callRejected",callRejected);
+
+    recordScalar("simulation time",time(nullptr)-initTime);
 
 }
 

@@ -24,6 +24,9 @@ src/Makefile.vc
 *.sca
 *.vec
 *.vci
+*.anf
+*.qtenvrc
+Makefile
 .buildlog*
 # local files not to be committed
 .oppfeaturestate

@@ -1507,6 +1507,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
 
         if (portDataArray[portForward].portStatus == DOWN) {
             delete pk;
+            emit(dropSignal,pk);
             return false;
         }
 
@@ -1541,6 +1542,8 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
         }
         else {
             if (!flodAdmision(pk->getReserve(), nullptr, &flowInfo, portForward, portInput, (PacketCode) pk->getType())) {
+                numDrop++;
+                emit(dropSignal,numDrop);
                 delete pk;
                 return false;
             }
@@ -1558,6 +1561,8 @@ bool FlowRouting::procDataType(Packet *pk, const int & portForward, const int & 
         itCallInfo = callInfomap.find(pk->getCallId());
         // flow
         if (itCallInfo == callInfomap.end() || itCallInfo->second.state != CALLUP) { // call not established yet, delete flow
+            numDrop++;
+            emit(dropSignal,numDrop);
             delete pk;
             return false;
         }
@@ -1608,9 +1613,13 @@ bool FlowRouting::procDataType(Packet *pk, const int & portForward, const int & 
     }
 
     // check if port is up and if there is enough bandwidth unreserved for not oriented flows.
+
+    // TODO: this must be re-do for non call traffic
     if (portForward != -1) {
 
         if (portDataArray[portForward].portStatus == DOWN) {
+            numDrop++;
+            emit(dropSignal,numDrop);
             delete pk;
             return false;
         }
@@ -1618,11 +1627,15 @@ bool FlowRouting::procDataType(Packet *pk, const int & portForward, const int & 
         if (!isCallOriented) {
             double limitcall = (double) portDataArray[portForward].nominalbw * reserveCall;
             if (limitcall > 0 && limitcall <= (double) portDataArray[portForward].occupation) {
+                numDrop++;
+                emit(dropSignal,numDrop);
                 delete pk;
                 return false;
             }
             double limitflow = (double) portDataArray[portForward].nominalbw * reserveFlows;
             if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOcupation) {
+                numDrop++;
+                emit(dropSignal,numDrop);
                 delete pk;
                 return false;
             }
@@ -1654,6 +1667,8 @@ bool FlowRouting::procDataType(Packet *pk, const int & portForward, const int & 
         }
         else {
             if (!flodAdmision(pk->getReserve(), nullptr, &flowInfo, portForward, portInput, (PacketCode) pk->getType())) {
+                numDrop++;
+                emit(dropSignal,numDrop);
                 delete pk;
                 return false;
             }
@@ -2186,12 +2201,18 @@ void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId,
                 emit(outputIfSignal, portForward);
                 send(pk, "out", portForward);
             }
-            else
+            else {
                 // port forward down, delete packet.
+                numDrop++;
+                emit(dropSignal,numDrop);
                 delete pk;
+            }
         }
-        else
+        else {
+            numDrop++;
+            emit(dropSignal,numDrop);
             delete pk;
+        }
     }
     if (releaseResources)
         checkPendingList();

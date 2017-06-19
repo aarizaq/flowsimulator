@@ -28,6 +28,7 @@ private:
 
     long callRequest = 0;
     long callLost = 0;
+    long numDrop = 0;
 
     //
     typedef std::map<int, int> RoutingTable; // destaddr -> gateindex

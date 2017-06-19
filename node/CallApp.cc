@@ -19,6 +19,7 @@ bool CallApp::residual = false;
 simsignal_t CallApp::actualizationSignal = registerSignal("actualizationSignal");
 simsignal_t CallApp::rcvdPk = registerSignal("rcvdPk");
 
+//#define ONLYONECALL
 
 Define_Module(CallApp);
 
@@ -73,8 +74,10 @@ void CallApp::checkAlg() {
             myfile << elem << "-";
         myfile << "\n";
     }
+#ifndef ONLYONECALL
     if (!destAddresses.empty())
         scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
+#endif
 }
 
 
@@ -453,18 +456,23 @@ void  CallApp::endFlow(FlowEvent *flowEvent) {
     if (pkFlow->getDestAddr() == myAddress)
         throw cRuntimeError("Destination address erroneous");
     send(pkFlow, "out");
-    double bsend = flowEvent->usedBandwith * SIMTIME_DBL(simTime() - flowEvent->startOn);
-    auto itStat = sendBytes.find(flowEvent->dest);
-    if (itStat == sendBytes.end())
-        sendBytes[flowEvent->dest] = (bsend/1000.0);
-    else
-        itStat->second = (bsend/1000.0);
+    if (simulationMode == FLOWMODE) {
+        double bsend = flowEvent->usedBandwith * SIMTIME_DBL(simTime() - flowEvent->startOn);
+        auto itStat = sendBytes.find(flowEvent->dest);
+        if (itStat == sendBytes.end())
+            sendBytes[flowEvent->dest] = (bsend/1000.0);
+        else
+            itStat->second += (bsend/1000.0);
+    }
 }
 
 // packet generaration
 void CallApp::newCallPacket(CallInfo *callInfo)
 {
     char pkname[100];
+
+    if (callInfo->interArrivalTime == SimTime::ZERO)
+        return;
 
     Packet *pkFlow = new Packet();
     pkFlow->setSourceId(par("sourceId").longValue());
@@ -483,8 +491,14 @@ void CallApp::newCallPacket(CallInfo *callInfo)
     // check if it is the latest packet of the flow.
     for (auto elem : CallEvents) {
         if (elem.second == callInfo) {
+            if (elem.second->state != ON)
+                throw cRuntimeError("Call state Error");
+
+
             if (simTime() + callInfo->interArrivalTime <= elem.first)
                 CallPacketsEvents.insert(std::make_pair(simTime() + callInfo->interArrivalTime, callInfo));
+            else if (simTime() > elem.first)
+                throw cRuntimeError("CallEvents Scheduler error compute time off");
             else
                 pkFlow->setLast(true);                 // last
             break;
@@ -493,6 +507,13 @@ void CallApp::newCallPacket(CallInfo *callInfo)
 
     if (pkFlow->getDestAddr() == myAddress)
         throw cRuntimeError("Destination address erroneous");
+
+    auto itStat = sendBytes.find(pkFlow->getDestAddr());
+    if (itStat == sendBytes.end())
+        sendBytes[pkFlow->getDestAddr()] = pkFlow->getBitLength();
+    else
+        itStat->second += pkFlow->getBitLength();
+    totalPkSent++;
     send(pkFlow, "out");
 }
 
@@ -517,15 +538,13 @@ void CallApp::procNextEvent()
 
         if (callInfo->flowData.empty()) {
             if (callInfo->state == ON) {
+                callInfo->interArrivalTime = SimTime::ZERO;
                 delayAux = endCallFlow(callInfo, pkFlow);
             }
             else if (callInfo->state == OFF) {
+                double timePackets = (double) callInfo->paketSize/ (double) callInfo->usedBandwith;
+                callInfo->interArrivalTime = SimTime(timePackets);
                 delayAux = startCallFlow(callInfo, pkFlow);
-                if (simulationMode == PACKETMODE) {
-                    // TODO: Compute interarrival time of the packet
-                    callInfo->interArrivalTime = (double) callInfo->paketSize/ (double) callInfo->usedBandwith;
-                    newCallPacket(callInfo);
-                }
             }
             if (pkFlow->getDestAddr() == myAddress)
                 throw cRuntimeError("Destination address erroneous");
@@ -534,6 +553,10 @@ void CallApp::procNextEvent()
             else
                 delete pkFlow;
             CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
+            // If simulation is Packet mode and state is in on, generate next
+            if (simulationMode == PACKETMODE && callInfo->state == ON) {
+                newCallPacket(callInfo);
+            }
         }
         else {
             // multi flow system
@@ -978,18 +1001,18 @@ void CallApp::storeCallStatistics(const CallInfo *callInfo) {
     }
 
 // record the statistics
-    auto itAccSend = sendBytes.find(callInfo->dest);
-    auto itAccRec = receivedBytes.find(callInfo->dest);
-
-    if (itAccSend == sendBytes.end())
-        sendBytes[callInfo->dest] = callInfo->acumulateSend;
-    else
-        itAccSend->second += callInfo->acumulateSend;
-
-    if (itAccRec == receivedBytes.end())
-        receivedBytes[callInfo->dest] = callInfo->acumulateRec;
-    else
-        itAccRec->second += callInfo->acumulateRec;
+    if (simulationMode == FLOWMODE) {
+        auto itAccSend = sendBytes.find(callInfo->dest);
+        auto itAccRec = receivedBytes.find(callInfo->dest);
+        if (itAccSend == sendBytes.end())
+            sendBytes[callInfo->dest] = callInfo->acumulateSend;
+        else
+            itAccSend->second += callInfo->acumulateSend;
+        if (itAccRec == receivedBytes.end())
+            receivedBytes[callInfo->dest] = callInfo->acumulateRec;
+        else
+            itAccRec->second += callInfo->acumulateRec;
+    }
 }
 
 void CallApp::release(Packet *pk) {
@@ -1404,8 +1427,13 @@ void CallApp::initialize()
     getNodesAddress(par("destAddresses"),destAddresses);
 
     generateCall = new cMessage("nextCall");
+#ifndef ONLYONECALL
     if (!destAddresses.empty())
         scheduleAt(callArrival->doubleValue(), generateCall);
+#else
+    if (!destAddresses.empty())
+        scheduleAt(simTime(), generateCall);
+#endif
 
     if (par("independentFlows").boolValue() && !destAddresses.empty()) {
         nextFlow = new cMessage();
@@ -1475,10 +1503,12 @@ void CallApp::handleMessage(cMessage *msg)
     if (!msg->isPacket()) {
         if (msg == generateCall) {
             newCall();
+#ifndef ONLYONECALL
             if (!destAddresses.empty())
                 scheduleAt(simTime() + callArrival->doubleValue(), generateCall);
             if (hasGUI())
                 getParentModule()->bubble("Generating call..");
+#endif
         }
         else if (msg == nextFlow) {
             newFlow();
@@ -1532,6 +1562,17 @@ void CallApp::handleMessage(cMessage *msg)
             throw cRuntimeError("This call must not be registered");
         delete pk;
     }
+    else if (pk->getType() == DATATYPE) {
+        totalPkRec++;
+        auto itAccRec = receivedBytes.find(pk->getSrcAddr());
+        if (itAccRec == receivedBytes.end())
+            receivedBytes[pk->getSrcAddr()] = pk->getBitLength();
+        else
+            itAccRec->second += pk->getBitLength();
+
+        emit(rcvdPk,pk);
+        delete pk;
+    }
     else // flow control packets, can be used to compute the statistics
     {
         procFlowPk(pk);
@@ -1544,16 +1585,36 @@ void CallApp::finish()
     // total data of flows and calls that has finished
     long double totalSend = 0;
     long double totalRec = 0;
-    for (auto elem : receivedBytes)
-        totalRec += elem.second;
-    for (auto elem : sendBytes)
-        totalSend += elem.second;
+    if (simulationMode == FLOWMODE) {
+        for (auto elem : receivedBytes)
+            totalRec += elem.second;
+        for (auto elem : sendBytes)
+            totalSend += elem.second;
 
-    // register call in curse
-    for (auto elem : activeCalls) {
-        totalRec += elem.second->acumulateRec;
-        totalSend += elem.second->acumulateSend;
+        // register call in curse
+        for (auto elem : activeCalls) {
+            if (elem.second->state == ON) {
+                bytesTraceSend(elem.second);
+                elem.second->acumulateSend += ((elem.second->usedBandwith * SIMTIME_DBL(simTime() - elem.second->startOn))/1000);
+            }
+            if (elem.second->stateRec == ON) {
+                bytesTraceRec(elem.second);
+                elem.second->acumulateRec += ((elem.second->recBandwith * SIMTIME_DBL(simTime() - elem.second->startOnRec))/1000);
+            }
+
+            totalRec += elem.second->acumulateRec;
+            totalSend += elem.second->acumulateSend;
+        }
+
     }
+    else {
+        for (auto elem : receivedBytes)
+            totalRec += (elem.second/1000);
+        for (auto elem : sendBytes)
+            totalSend += (elem.second/1000);
+    }
+
+
     activeCalls.clear();
 
     // pending flow "end" in transmission
@@ -1576,6 +1637,9 @@ void CallApp::finish()
 
     recordScalar("Total Send Kb",totalSend);
     recordScalar("Total Rec Kb",totalRec);
+
+    recordScalar("Total Pk Sent",totalPkSent);
+    recordScalar("Total Pk Rec",totalPkRec);
 
     recordScalar("Total calls generated",callCounter);
     recordScalar("Total calls established",callEstabilized);

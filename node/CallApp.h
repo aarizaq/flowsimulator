@@ -79,6 +79,9 @@ private:
     long callReceived = 0;
     long callRejected = 0;
 
+    long totalPkSent = 0;
+    long totalPkRec = 0;
+
 
     enum State
     {

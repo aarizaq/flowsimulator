@@ -14,6 +14,7 @@
 #include "FlowDataTypes.h"
 #include "Packet_m.h"
 #include "DijktraKShortest.h"
+#include "IRoutingModule.h"
 #include <time.h>
 
 using namespace omnetpp;
@@ -22,23 +23,10 @@ using namespace omnetpp;
  * Generates traffic for the network.
  */
 
-class CallApp : public cSimpleModule, public cListener
+class CallApp : public cSimpleModule
 {
 protected:
     SimulationMode simulationMode = FLOWMODE;
-    enum RoutingType {
-        HOPBYHOP,
-        SOURCEROUTING,
-        SOURCEROUTINGNORMAL,
-        DISJOINT,
-        BACKUPROUTE,
-        BACKUPROUTEKSH,
-        SW,
-        WS,
-        SWFUZZY,
-        WSFUZZY
-     };
-    RoutingType rType;
 private:
     // configuration
     int myAddress;
@@ -151,10 +139,10 @@ private:
     std::multimap<simtime_t, CallInfo*> CallPacketsEvents;
     std::multimap<simtime_t, FlowEvent*> FlowPacketsEvents;
 
-    DijkstraFuzzy *dijFuzzy = nullptr;
-    Dijkstra *dijkstra = nullptr;
-    DijkstraKshortest *dijkstraks = nullptr;
     SequenceTable sequenceTable;
+
+    IRoutingModule * routingModule = nullptr;
+
 
     std::map<int, long double> receivedBytes;
     std::map<int, long double> sendBytes;
@@ -190,10 +178,6 @@ public:
     virtual ~CallApp();
 
 protected:
-    using cIListener::finish;
-
-    virtual void checkAlg();
-    virtual void readTopo();
     virtual void rescheduleEvent();
     virtual void procNextEvent();
     virtual void newCall();
@@ -202,14 +186,10 @@ protected:
     virtual void newAccepted(Packet *);
     virtual void release(Packet *);
     virtual void procFlowPk(Packet *);
-    virtual void procActualize(Actualize *);
     virtual void getNodesAddress(const char *destAddressesPar, std::vector<int> &listAddres);
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
-    virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
-
-
 };
 
 #endif /* CALLAPP_H_ */

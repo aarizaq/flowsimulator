@@ -30,7 +30,12 @@ module Node
                 address = address;
                 @display("p=140,60,row");
         }
-        routing: FlowRouting {
+        routing: RoutingModule {
+            parameters:
+                 @display("p=80,130");
+        }
+        
+        forwarding: FlowRouting {
             parameters:
                 @display("p=140,130");
             gates:
@@ -43,14 +48,16 @@ module Node
         }
     connections:
         for i=0..numSources-1 {
-            routing.localOut++ --> app[i].in;
-            routing.localIn++ <-- app[i].out;
+            forwarding.localOut++ --> app[i].in;
+            forwarding.localIn++ <-- app[i].out;
         }
         for i=0..sizeof(port)-1 {
-            routing.out[i] --> queue[i].in;
-            routing.in[i] <-- queue[i].out;
+            forwarding.out[i] --> queue[i].in;
+            forwarding.in[i] <-- queue[i].out;
             queue[i].line <--> port[i];
         }
+        forwarding.toRouting --> routing.in;
+        forwarding.fromRouting <-- routing.out;
 }
 
 

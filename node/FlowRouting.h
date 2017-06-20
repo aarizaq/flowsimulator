@@ -10,14 +10,26 @@
 #include "FlowDataTypes.h"
 
 #include "BaseFlowDistribution.h"
+#include "IForwarding.h"
+#include "IRoutingModule.h"
 
 using namespace omnetpp;
 
 /**
  * Demonstrates call and flow simulations using static routing, utilizing the cTopology class.
  */
-class FlowRouting : public cSimpleModule, public cListener
+class FlowRouting : public cSimpleModule, public cListener, public IForwarding
 {
+public:
+    virtual unsigned int getNumPorts() override;
+    virtual void getPorts(std::vector<PortData> &) override;
+    virtual PortData getPort(const int &) override;
+    virtual int getPortNeighbor(const int &) override;
+    virtual int getNeighborConnectPort(const int &) const override;
+    virtual void getRoutingTable(std::map<int, int> &) override;
+    virtual int getRouting(const int&) override;
+    virtual int getAddress() override;
+    virtual void setRoute(const int &,const int &) override;
 private:
     SimulationMode simulationMode = FLOWMODE;
 
@@ -66,8 +78,10 @@ private:
     //cMessage *computeBwTimer = nullptr;
 
     static simsignal_t actualizationSignal;
+    static simsignal_t actualizationPortsSignal;
+    static simsignal_t changeRoutingTableSignal;
 
-    DijkstraKshortest * dijkstra = nullptr;
+    IRoutingModule *routingModule = nullptr;
 
     simtime_t lastTimeActualize;
 
@@ -90,7 +104,6 @@ private:
     virtual void checkPendingList();
     virtual bool flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoInputPtr, FlowInfo *flowInfoOutputPtr, const int & portForward, const int & portInput, PacketCode codeStart);
     virtual bool sendChangeFlow(FlowInfo &, const int &);
-    virtual void procActualize(Actualize *pkt);
     virtual void procBroadcast(Base *pkt);
     virtual bool preProcPacket(Packet *);
     virtual bool procStartFlow(Packet *, const int&, const int&);

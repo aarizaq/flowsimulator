@@ -19,6 +19,77 @@ Define_Module(FlowRouting);
 
 simsignal_t FlowRouting::actualizationSignal = registerSignal("actualizationSignal");
 simsignal_t FlowRouting::eventSignal = registerSignal("EventSignal");
+simsignal_t FlowRouting::actualizationPortsSignal = registerSignal("actualizationPortsSignal");
+simsignal_t FlowRouting::changeRoutingTableSignal = registerSignal("changeRoutingTableSignal");
+
+
+
+unsigned int FlowRouting::getNumPorts()
+{
+    return portDataArray.size();
+}
+
+void FlowRouting::getPorts(std::vector<PortData> &p)
+{
+    p = portDataArray;
+}
+
+PortData FlowRouting::getPort(const int &i)
+{
+    if (i <0 || i >=  (int)portDataArray.size())
+        throw cRuntimeError("Port id is out of the array size");
+    return portDataArray[i];
+}
+
+int FlowRouting::getPortNeighbor(const int &i)
+{
+    if (i <0 || i >=  (int)portDataArray.size())
+        throw cRuntimeError("Port id is out of the array size");
+    return portDataArray[i].neighbor;
+
+}
+
+int FlowRouting::getNeighborConnectPort(const int &i) const
+{
+    auto it = neighbors.find(i);
+    if (it != neighbors.end())
+        return it->second.port;
+    return -1;
+}
+
+void FlowRouting::getRoutingTable(std::map<int, int> &t)
+{
+    t = rtable;
+}
+
+int FlowRouting::getRouting(const int &a)
+{
+    auto it = rtable.find(a);
+    if (it == rtable.end())
+        return -1;
+    return it->second;
+}
+
+int FlowRouting::getAddress()
+{
+    return myAddress;
+}
+
+void FlowRouting::setRoute(const int & a,const int & p)
+{
+    auto it = rtable.find(a);
+    if (it != rtable.end() && p == -1) {
+        rtable.erase(it);
+        return;
+    }
+
+    if (it == rtable.end())
+        rtable.insert(std::make_pair(a,p));
+    else
+        it->second = p;
+}
+
+
 
 // TODO: Mecanismos de reserva y comparticion cuando los enlaces estan llenos, el ancho de banda se reparte y se puede cambiar el ancho de banda en funcion del reparto.
 
@@ -57,6 +128,7 @@ void FlowRouting::computeUsedBw()
             elem.varSamples.clear();
             elem.lastC.instant = simTime();
         }
+        emit(actualizationPortsSignal,true);
         return;
     }
 
@@ -132,12 +204,14 @@ void FlowRouting::computeUsedBw()
         elem.lastC.instant = simTime();
     }
     computationInterval = simTime();
+    emit(actualizationPortsSignal,true);
     // scheduleAt(simTime()+computationInterval,computeBwTimer);
 }
 
 void FlowRouting::initialize()
 {
     getSimulation()->getSystemModule()->subscribe(eventSignal, this);
+    this->getParentModule()->subscribe(changeRoutingTableSignal, this);
 
     myAddress = getParentModule()->par("address");
 
@@ -202,7 +276,16 @@ void FlowRouting::initialize()
         val.instant = simTime();
         val.value = portDataArray[i].flowOcupation;
         recordOccupation(portDataArray[i], val);
+        for (auto elem: neighbors) {
+            if (elem.second.port == (int)i) {
+                portDataArray[i].neighbor = elem.first;
+                break;
+            }
+        }
+        if (portDataArray[i].neighbor == -1)
+            throw cRuntimeError("Neighbor not found");
     }
+
     actualizePercentaje();
     delete topo;
     localOutSize = this->gateSize("localOut");
@@ -223,6 +306,11 @@ void FlowRouting::initialize()
 
     if (par("packetMode"))
         simulationMode = PACKETMODE;
+
+    cModule *mod = gate("toRouting")->getPathEndGate()->getOwnerModule();
+    if (mod) {
+        routingModule = check_and_cast<IRoutingModule *>(mod);
+    }
 
     actualizeTimer = new cMessage("actualize timer");
     //computeBwTimer = new cMessage("actualize bw timer");
@@ -440,14 +528,19 @@ void FlowRouting::procBroadcast(Base *pkbase)
     // actualize data
     if (packets.empty())
         return;
+
     for (auto &elem : packets) {
         if (elem->getType() == ACTUALIZE) {
             Actualize *pkt = check_and_cast<Actualize *>(elem);
-            procActualize(pkt);
+            if (routingModule)
+                send(pkt->dup(),"toRouting");
+        }
+        else {
             for (int i = 0; i < localOutSize; i++)
                 send(elem->dup(), "localOut", i);
         }
     }
+
     // send a copy to neighbors
     pkbase = packets.back();
     packets.pop_back();
@@ -456,14 +549,16 @@ void FlowRouting::procBroadcast(Base *pkbase)
         pkbase = packets.back();
         packets.pop_back();
     }
+
     Actualize* actPk = dynamic_cast<Actualize*>(pkbase);
-    if (actPk == nullptr || (actPk != nullptr && !actualize(actPk))) {
-        for (auto elem : neighbors) {
-            if (gateIndex != elem.second.port && elem.second.state == UP)
-                send(pkbase->dup(), "out", elem.second.port);
-        }
-        delete pkbase;
+    if (actPk == nullptr || actPk != nullptr )
+        actualize(actPk);
+
+    for (auto elem : neighbors) {
+        if (gateIndex != elem.second.port && elem.second.state == UP)
+            send(pkbase->dup(), "out", elem.second.port);
     }
+    delete pkbase;
 }
 
 bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
@@ -531,47 +626,6 @@ bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
     return true;
 }
 
-void FlowRouting::procActualize(Actualize *pkt)
-{
-
-    if (dijkstra == nullptr)
-        return;
-    for (unsigned int i = 0; i < pkt->getLinkDataArraySize(); i++) {
-        if (pkt->getLinkData(i).residual > 0)
-            dijkstra->addEdge(pkt->getSrcAddr(), pkt->getLinkData(i).node, 1.0 / (double) pkt->getLinkData(i).residual, 0, 1000, 0);
-        else
-            dijkstra->deleteEdge(pkt->getSrcAddr(), pkt->getLinkData(i).node);
-    }
-    dijkstra->setRoot(myAddress);
-    dijkstra->run();
-    std::vector<std::pair<int,int> > portChanges;
-    for (auto &elem : rtable) {
-        std::vector<NodeId> pathNode;
-        dijkstra->getRoute(elem.first, pathNode);
-        if (pathNode.empty())
-            elem.second = -1;
-        else {
-            auto it = neighbors.find(pathNode[0]);
-            if (it == neighbors.end())
-                throw cRuntimeError("Node not in neighbors table");
-            if (elem.second != it->second.port) {
-                portChanges.push_back(std::make_pair(elem.second,it->second.port));
-                elem.second = it->second.port;
-            }
-        }
-    }
-
-    if (!portChanges.empty()) {
-        // there is a change in the route, it is possible that flows could change.
-        for (auto flow : outputFlows) {
-            for (auto elem : portChanges) {
-                if ((flow.second.port == elem.first) && flow.second.sourceRouting.empty()) { // flow that change
-                    sendChangeFlow(flow.second,elem.second);
-                }
-            }
-        }
-    }
-}
 
 // process link break and link restore events
 void FlowRouting::processLinkEvents(cObject *obj)
@@ -2244,8 +2298,6 @@ void FlowRouting::handleMessage(cMessage *msg)
     }
 
     Base *pkbase = check_and_cast<Base *>(msg);
-
-
 
     if ((pkbase->getType() == STARTFLOW || pkbase->getType() == CROUTEFLOWSTART || pkbase->getType() == FLOWCHANGE || pkbase->getType() == ENDFLOW || pkbase->getType() == CROUTEFLOWEND) && simulationMode != FLOWMODE) {
             throw cRuntimeError("Packet of type flow  but simulator not in Flow mode");

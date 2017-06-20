@@ -199,9 +199,14 @@ struct PortData
     double accmax = 0;
     std::vector<double> varSamples;
     ChangeBw lastC;
+    int neighbor = -1;
 };
 
 
-
+struct ChangeRoutingTable : public cObject {
+    int destination;
+    int oldPort;
+    int newPort;
+};
 
 #endif /* DATATYPES_H_ */

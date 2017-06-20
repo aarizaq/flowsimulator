@@ -30,6 +30,8 @@ simple FlowRouting
         @signal[drop](type="long");
         @signal[outputIf](type="long");
         @signal[actualizationSignal](type=Packet);
+        @signal[actualizationPortsSignal](type="bool");
+        @signal[changeRoutingTableSignal];
         @statistic[drop](title="dropped packet byte length";unit=bytes;record=vector?,count,sum;interpolationmode=none);
         @statistic[outputIf](title="output interface for each routed packet";record=histogram;interpolationmode=none);
     gates:
@@ -37,6 +39,10 @@ simple FlowRouting
         output out[];
         input localIn[];
         output localOut[];
+        
+        output toRouting;
+        input fromRouting;
+        
 }
 
 

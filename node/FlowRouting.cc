@@ -2448,6 +2448,57 @@ void FlowRouting::receiveSignal(cComponent *source, simsignal_t signalID, cObjec
         if (event)
         processLinkEvents(event);
     }
+    else if (signalID == changeRoutingTableSignal) {
+        ChangeRoutingTable * event = dynamic_cast<ChangeRoutingTable *>(obj);
+        if (event)
+            processChangeRoutes(event);
+    }
+}
+
+void FlowRouting::processChangeRoutes(ChangeRoutingTable *obj)
+{
+    // end flee flows
+
+    for (auto &elem : outputFlows) {
+        if (elem.second.port == obj->oldPort) {
+            Packet *pkt = new Packet();
+            pkt->setCallId(0);
+            pkt->setType(ENDFLOW);
+            pkt->setFlowId(elem.second.identify.flowId());
+            pkt->setSrcAddr(elem.second.identify.src());
+            pkt->setSourceId(elem.second.identify.srcId());
+            pkt->setDestAddr(myAddress);
+            pkt->setDestinationId(elem.second.destId);
+            auto it = sourceIdGate.find(pkt->getDestinationId());
+
+            if (it == sourceIdGate.end())
+                throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
+            if (hasGUI()) {
+                char pkname[100];
+                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+                        pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
+                pkt->setName(pkname);
+            }
+            send(pkt->dup(), "out", obj->oldPort);
+            portDataArray[obj->oldPort].flowOcupation += elem.second.used;
+            ChangeBw val;
+            val.instant = simTime();
+            val.value = portDataArray[obj->oldPort].flowOcupation;
+            recordOccupation(portDataArray[obj->oldPort], val);
+            // move to new port
+            pkt->setType(STARTFLOW);
+            if (portDataArray[obj->newPort].flowOcupation > elem.second.used) {
+                portDataArray[obj->newPort].flowOcupation -= elem.second.used;
+                simtime_t t = SimTime(2,SIMTIME_PS);
+                sendDelayed(pkt,t,"out", obj->newPort);
+                elem.second.port = obj->newPort;
+            }
+            else {
+                // TODO:
+                throw cRuntimeError("Not supported yet");
+            }
+        }
+    }
 }
 
 void FlowRouting::finish()

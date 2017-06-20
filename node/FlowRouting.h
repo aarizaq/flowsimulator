@@ -98,6 +98,8 @@ private:
     virtual bool actualize(Actualize * = nullptr);
     virtual bool actualizePercentaje();
     virtual void processLinkEvents(cObject *msg);
+    virtual void processChangeRoutes(ChangeRoutingTable *msg);
+
     virtual void getListFlowsToModifyStartFlow(const int &, std::vector<FlowInfo *> &, std::vector<FlowInfo *> &);
     virtual bool procReserve(Packet *msg, int&, int&);
     virtual bool getForwarPortFreeFlow(Packet *msg, int&);

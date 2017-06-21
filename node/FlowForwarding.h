@@ -113,7 +113,7 @@ private:
     virtual bool procEndFlow(Packet *);
     virtual bool procEndFlowStoreAndForward(Packet *);
     virtual bool procEndFlowLost(Packet *);
-    virtual bool procDataType(Packet *, const int&, const int&);
+    virtual bool procDataType(Packet *, const int&, const int&, CallInfo *);
 
     virtual void postProc(Packet *, const int&, const int&, const int &);
     virtual void computeUsedBw();

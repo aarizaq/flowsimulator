@@ -1607,14 +1607,11 @@ bool FlowForwarding::procStartFlow(Packet *pk, const int & portForward, const in
 }
 
 
-bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int & portInput)
+bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int & portInput,  CallInfo* callInfo)
 {
     bool isCallOriented = (pk->getCallId() > 0);
-    auto itCallInfo = callInfomap.end();
     if (isCallOriented) {
-        itCallInfo = callInfomap.find(pk->getCallId());
-        // flow
-        if (itCallInfo == callInfomap.end() || itCallInfo->second.state != CALLUP) { // call not established yet, delete flow
+        if (callInfo == nullptr || callInfo->state != CALLUP) { // call not established yet, delete flow
             numDrop++;
             emit(dropSignal,numDrop);
             delete pk;
@@ -1648,22 +1645,24 @@ bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int
     bool isInInput = false;
 
     if (isCallOriented) {
-        for (auto elem : itCallInfo->second.outputFlows) {
-            if (elem.identify  == flowId) {
-                isInOutput = true;
-                break;
-            }
-        }
-
-        for (auto elem : itCallInfo->second.inputFlows) {
-            if (elem.identify == flowId) {
-                isInInput = true;
-                break;
-            }
-        }
+        auto itAux = std::find(callInfo->outputFlows.begin(),callInfo->outputFlows.end(),flowInfo);
+        if (itAux != callInfo->outputFlows.end())
+            isInOutput = true;
+        itAux = std::find(callInfo->inputFlows.begin(),callInfo->inputFlows.end(),flowInfo);
+        if (itAux != callInfo->inputFlows.end())
+            isInInput = true;
         // register the flow in the input list
         if (!isInInput)
-            itCallInfo->second.inputFlows.push_back(flowInfo);
+            callInfo->inputFlows.push_back(flowInfo);
+    }
+    else {
+        auto itAux1 = inputFlows.find(flowId);
+        if (itAux1 != inputFlows.end())
+            isInInput = true;
+        auto itAux2 = outputFlows.find(flowId);
+        if (itAux2 != outputFlows.end())
+            isInOutput = true;
+        throw cRuntimeError("TODO: Support for non call traffic");
     }
 
     // check if port is up and if there is enough bandwidth unreserved for not oriented flows.
@@ -1678,7 +1677,7 @@ bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int
             return false;
         }
         // limits for not oriented flows
-        if (!isCallOriented) {
+        if (!isCallOriented && isInOutput) {
             double limitcall = (double) portDataArray[portForward].nominalbw * reserveCall;
             if (limitcall > 0 && limitcall <= (double) portDataArray[portForward].occupation) {
                 numDrop++;
@@ -1714,8 +1713,8 @@ bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int
             val.value = portDataArray[portForward].flowOcupation;
             recordOccupation(portDataArray[portForward], val);
 
-            if (itCallInfo != callInfomap.end())
-                itCallInfo->second.outputFlows.push_back(flowInfo);
+            if (callInfo != nullptr)
+                callInfo->outputFlows.push_back(flowInfo);
             else
                 outputFlows[flowId] = flowInfo;
         }
@@ -2348,6 +2347,10 @@ void FlowForwarding::handleMessage(cMessage *msg)
     }
     else {
         if (pk->getCallId() > 0) {
+            if (itCallInfo == callInfomap.end()) {
+                delete pk;
+                return;
+            }
             if (srcAddr == myAddress) {
                 if (itCallInfo->second.port1 != -1)
                     portForward = itCallInfo->second.port1;
@@ -2432,9 +2435,14 @@ void FlowForwarding::handleMessage(cMessage *msg)
         }
         else if (pk->getType() == DATATYPE) {
             // Process data packet.
-            if (!procDataType(pk, portForward, portInput))
+            if (itCallInfo != callInfomap.end()) {
+              if (!procDataType(pk, portForward, portInput, &itCallInfo->second))
                 return;  // nothing more to do
-
+            }
+            else {
+                if (!procDataType(pk, portForward, portInput, nullptr))
+                    return;  // nothing more to do
+            }
         }
     }
     postProc(pk, destAddr, destId, portForward);

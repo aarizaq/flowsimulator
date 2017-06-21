@@ -18,7 +18,7 @@ package node;
 //
 // TODO auto-generated module
 //
-simple RoutingModule
+simple RoutingModule like IRouting
 {
     parameters:
     // Routing type

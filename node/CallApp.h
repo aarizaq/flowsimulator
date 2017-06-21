@@ -14,8 +14,8 @@
 #include "FlowDataTypes.h"
 #include "Packet_m.h"
 #include "DijktraKShortest.h"
-#include "IRoutingModule.h"
 #include <time.h>
+#include "IRouting.h"
 
 using namespace omnetpp;
 
@@ -141,7 +141,7 @@ private:
 
     SequenceTable sequenceTable;
 
-    IRoutingModule * routingModule = nullptr;
+    IRouting * routingModule = nullptr;
 
 
     std::map<int, long double> receivedBytes;

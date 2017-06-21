@@ -12,7 +12,7 @@ package node;
 //
 // Models a router.
 //
-simple FlowRouting
+simple FlowForwarding like IForwarding
 {
     parameters:
         volatile double actualizeState @unit(s)= default(60s);

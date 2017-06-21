@@ -11,14 +11,14 @@
 
 #include "BaseFlowDistribution.h"
 #include "IForwarding.h"
-#include "IRoutingModule.h"
+#include "IRouting.h"
 
 using namespace omnetpp;
 
 /**
  * Demonstrates call and flow simulations using static routing, utilizing the cTopology class.
  */
-class FlowRouting : public cSimpleModule, public cListener, public IForwarding
+class FlowForwarding : public cSimpleModule, public cListener, public IForwarding
 {
 public:
     virtual unsigned int getNumPorts() override;
@@ -81,7 +81,7 @@ private:
     static simsignal_t actualizationPortsSignal;
     static simsignal_t changeRoutingTableSignal;
 
-    IRoutingModule *routingModule = nullptr;
+    IRouting *routingModule = nullptr;
 
     simtime_t lastTimeActualize;
 
@@ -92,7 +92,7 @@ private:
     BaseFlowDistribution * flowDist = nullptr;
 
     simtime_t computationInterval = 5;
-    ~FlowRouting();
+    ~FlowForwarding();
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *) override;
 
     virtual bool actualize(Actualize * = nullptr);

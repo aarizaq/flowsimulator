@@ -13,10 +13,10 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef NODE_IROUTINGMODULE_H_
-#define NODE_IROUTINGMODULE_H_
+#ifndef NODE_IROUTING_H_
+#define NODE_IROUTING_H_
 
-class IRoutingModule {
+class IRouting {
 public:
     enum RoutingType {
         HOPBYHOP,
@@ -35,4 +35,4 @@ public:
     virtual void getRoute(int, std::vector<int> &, std::vector<int> &) = 0;
 };
 
-#endif /* NODE_IROUTINGMODULE_H_ */
+#endif /* NODE_IROUTING_H_ */

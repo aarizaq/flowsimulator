@@ -12,36 +12,36 @@
 #pragma warning(disable:4786)
 #endif
 
-#include "FlowRouting.h"
+#include "FlowForwarding.h"
 #include "FailureEvent.h"
 
-Define_Module(FlowRouting);
+Define_Module(FlowForwarding);
 
-simsignal_t FlowRouting::actualizationSignal = registerSignal("actualizationSignal");
-simsignal_t FlowRouting::eventSignal = registerSignal("EventSignal");
-simsignal_t FlowRouting::actualizationPortsSignal = registerSignal("actualizationPortsSignal");
-simsignal_t FlowRouting::changeRoutingTableSignal = registerSignal("changeRoutingTableSignal");
+simsignal_t FlowForwarding::actualizationSignal = registerSignal("actualizationSignal");
+simsignal_t FlowForwarding::eventSignal = registerSignal("EventSignal");
+simsignal_t FlowForwarding::actualizationPortsSignal = registerSignal("actualizationPortsSignal");
+simsignal_t FlowForwarding::changeRoutingTableSignal = registerSignal("changeRoutingTableSignal");
 
 
 
-unsigned int FlowRouting::getNumPorts()
+unsigned int FlowForwarding::getNumPorts()
 {
     return portDataArray.size();
 }
 
-void FlowRouting::getPorts(std::vector<PortData> &p)
+void FlowForwarding::getPorts(std::vector<PortData> &p)
 {
     p = portDataArray;
 }
 
-PortData FlowRouting::getPort(const int &i)
+PortData FlowForwarding::getPort(const int &i)
 {
     if (i <0 || i >=  (int)portDataArray.size())
         throw cRuntimeError("Port id is out of the array size");
     return portDataArray[i];
 }
 
-int FlowRouting::getPortNeighbor(const int &i)
+int FlowForwarding::getPortNeighbor(const int &i)
 {
     if (i <0 || i >=  (int)portDataArray.size())
         throw cRuntimeError("Port id is out of the array size");
@@ -49,7 +49,7 @@ int FlowRouting::getPortNeighbor(const int &i)
 
 }
 
-int FlowRouting::getNeighborConnectPort(const int &i) const
+int FlowForwarding::getNeighborConnectPort(const int &i) const
 {
     auto it = neighbors.find(i);
     if (it != neighbors.end())
@@ -57,12 +57,12 @@ int FlowRouting::getNeighborConnectPort(const int &i) const
     return -1;
 }
 
-void FlowRouting::getRoutingTable(std::map<int, int> &t)
+void FlowForwarding::getRoutingTable(std::map<int, int> &t)
 {
     t = rtable;
 }
 
-int FlowRouting::getRouting(const int &a)
+int FlowForwarding::getRouting(const int &a)
 {
     auto it = rtable.find(a);
     if (it == rtable.end())
@@ -70,12 +70,12 @@ int FlowRouting::getRouting(const int &a)
     return it->second;
 }
 
-int FlowRouting::getAddress()
+int FlowForwarding::getAddress()
 {
     return myAddress;
 }
 
-void FlowRouting::setRoute(const int & a,const int & p)
+void FlowForwarding::setRoute(const int & a,const int & p)
 {
     auto it = rtable.find(a);
     if (it != rtable.end() && p == -1) {
@@ -93,7 +93,7 @@ void FlowRouting::setRoute(const int & a,const int & p)
 
 // TODO: Mecanismos de reserva y comparticion cuando los enlaces estan llenos, el ancho de banda se reparte y se puede cambiar el ancho de banda en funcion del reparto.
 
-void FlowRouting::recordOccupation(PortData &port, const ChangeBw &val)
+void FlowForwarding::recordOccupation(PortData &port, const ChangeBw &val)
 {
     if (port.accmin > val.value)
         port.accmin = val.value;
@@ -106,14 +106,14 @@ void FlowRouting::recordOccupation(PortData &port, const ChangeBw &val)
 }
 
 
-FlowRouting::~FlowRouting()
+FlowForwarding::~FlowForwarding()
 {
     cancelAndDelete(actualizeTimer);
     callInfomap.clear();
     portDataArray.clear();
 }
 
-void FlowRouting::computeUsedBw()
+void FlowForwarding::computeUsedBw()
 {
     simtime_t interval = simTime() - computationInterval;
     if (interval == simtime_t::ZERO) {
@@ -208,7 +208,7 @@ void FlowRouting::computeUsedBw()
     // scheduleAt(simTime()+computationInterval,computeBwTimer);
 }
 
-void FlowRouting::initialize()
+void FlowForwarding::initialize()
 {
     getSimulation()->getSystemModule()->subscribe(eventSignal, this);
     this->getParentModule()->subscribe(changeRoutingTableSignal, this);
@@ -309,7 +309,7 @@ void FlowRouting::initialize()
 
     cModule *mod = gate("toRouting")->getPathEndGate()->getOwnerModule();
     if (mod) {
-        routingModule = check_and_cast<IRoutingModule *>(mod);
+        routingModule = check_and_cast<IRouting *>(mod);
     }
 
     actualizeTimer = new cMessage("actualize timer");
@@ -319,7 +319,7 @@ void FlowRouting::initialize()
     scheduleAt(simTime(), actualizeTimer);
 }
 
-bool FlowRouting::actualize(Actualize *other)
+bool FlowForwarding::actualize(Actualize *other)
 {
     if (par("actPercentage")) {
         return actualizePercentaje();
@@ -393,7 +393,7 @@ bool FlowRouting::actualize(Actualize *other)
     return true;
 }
 
-bool FlowRouting::actualizePercentaje()
+bool FlowForwarding::actualizePercentaje()
 {
     if (!par("actPercentage"))
         return false;
@@ -454,7 +454,7 @@ bool FlowRouting::actualizePercentaje()
     return true;
 }
 
-void FlowRouting::getListFlowsToModifyStartFlow(const int &port,  std::vector<FlowInfo *> &listFlows,  std::vector<FlowInfo *> &listFlowsInput)
+void FlowForwarding::getListFlowsToModifyStartFlow(const int &port,  std::vector<FlowInfo *> &listFlows,  std::vector<FlowInfo *> &listFlowsInput)
 {
     for (auto it = callInfomap.begin(); it != callInfomap.end(); ++it) {
         if (it->second.port1 == port || it->second.port2 == port) {
@@ -482,7 +482,7 @@ void FlowRouting::getListFlowsToModifyStartFlow(const int &port,  std::vector<Fl
     }
 }
 
-void FlowRouting::procBroadcast(Base *pkbase)
+void FlowForwarding::procBroadcast(Base *pkbase)
 {
     // arrival gate index
     int gateIndex = -1;
@@ -561,7 +561,7 @@ void FlowRouting::procBroadcast(Base *pkbase)
     delete pkbase;
 }
 
-bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
+bool FlowForwarding::sendChangeFlow(FlowInfo &flow, const int &portForward)
 {
  // check if exist in the imput list
 
@@ -628,7 +628,7 @@ bool FlowRouting::sendChangeFlow(FlowInfo &flow, const int &portForward)
 
 
 // process link break and link restore events
-void FlowRouting::processLinkEvents(cObject *obj)
+void FlowForwarding::processLinkEvents(cObject *obj)
 {
     Event * event = dynamic_cast<Event *>(obj);
 
@@ -1035,7 +1035,7 @@ void FlowRouting::processLinkEvents(cObject *obj)
 }
 
 // this method checks if it is possible to reserve enough bandwidth, it it possible return true, if not is possible sends a reject message to the origin and returns false.
-bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
+bool FlowForwarding::procReserve(Packet *pk, int &portForward, int &destId)
 {
     if (pk->getCallId() == 0)
         return false;
@@ -1152,7 +1152,7 @@ bool FlowRouting::procReserve(Packet *pk, int &portForward, int &destId)
 }
 
 // this method obtain the output port of a free flow, if it is possible to determome the output port return true, in other case false, port portForward = -1 the destination is this node
-bool FlowRouting::getForwarPortFreeFlow(Packet *pk, int &portForward)
+bool FlowForwarding::getForwarPortFreeFlow(Packet *pk, int &portForward)
 {
     portForward = -1;
     auto it = rtable.end();
@@ -1192,7 +1192,7 @@ bool FlowRouting::getForwarPortFreeFlow(Packet *pk, int &portForward)
     return true;
 }
 
-void FlowRouting::checkPendingList()
+void FlowForwarding::checkPendingList()
 {
 
     // first check delayed list.
@@ -1377,7 +1377,7 @@ void FlowRouting::checkPendingList()
     }
 }
 
-bool FlowRouting::preProcPacket(Packet *pk)
+bool FlowForwarding::preProcPacket(Packet *pk)
 {
     if (pk->getCallId() > 0) {
         auto itCallInfo = callInfomap.find(pk->getCallId());
@@ -1477,7 +1477,7 @@ bool FlowRouting::preProcPacket(Packet *pk)
     return true;
 }
 
-bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int & portInput)
+bool FlowForwarding::procStartFlow(Packet *pk, const int & portForward, const int & portInput)
 {
     bool isCallOriented = (pk->getCallId() > 0);
     auto itCallInfo = callInfomap.end();
@@ -1607,7 +1607,7 @@ bool FlowRouting::procStartFlow(Packet *pk, const int & portForward, const int &
 }
 
 
-bool FlowRouting::procDataType(Packet *pk, const int & portForward, const int & portInput)
+bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int & portInput)
 {
     bool isCallOriented = (pk->getCallId() > 0);
     auto itCallInfo = callInfomap.end();
@@ -1732,7 +1732,7 @@ bool FlowRouting::procDataType(Packet *pk, const int & portForward, const int & 
 }
 
 
-bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutputPtr, FlowInfo *flowInfoInputPtr, const int & portForward, const int & portInput, PacketCode codeStart)
+bool FlowForwarding::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutputPtr, FlowInfo *flowInfoInputPtr, const int & portForward, const int & portInput, PacketCode codeStart)
 {
     // consume bandwidth
     auto itCallInfo = callInfomap.end();
@@ -1864,7 +1864,7 @@ bool FlowRouting::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOutput
 }
 
 
-bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int & portInput)
+bool FlowForwarding::procFlowChange(Packet *pk, const int & portForward, const int & portInput)
 {
     bool isCallOriented = (pk->getCallId() > 0);
     auto itCallInfo = callInfomap.end();
@@ -2005,7 +2005,7 @@ bool FlowRouting::procFlowChange(Packet *pk, const int & portForward, const int 
     return true;
 }
 
-bool FlowRouting::procEndFlow(Packet *pk)
+bool FlowForwarding::procEndFlow(Packet *pk)
 {
    if (flowAdmisionMode == STOREANDFORWARD)
        return procEndFlowStoreAndForward(pk);
@@ -2013,7 +2013,7 @@ bool FlowRouting::procEndFlow(Packet *pk)
        return procEndFlowLost(pk);
 }
 
-bool FlowRouting::procEndFlowLost(Packet *pk)
+bool FlowForwarding::procEndFlowLost(Packet *pk)
 {
     bool isCallOriented = (pk->getCallId() > 0);
 
@@ -2094,7 +2094,7 @@ bool FlowRouting::procEndFlowLost(Packet *pk)
     return true;
 }
 
-bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
+bool FlowForwarding::procEndFlowStoreAndForward(Packet *pk)
 {
     bool isCallOriented = (pk->getCallId() > 0);
 
@@ -2228,7 +2228,7 @@ bool FlowRouting::procEndFlowStoreAndForward(Packet *pk)
     return true;
 }
 
-void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId, const int & portForward)
+void FlowForwarding::postProc(Packet *pk, const int & destAddr, const int & destId, const int & portForward)
 {
     // check if event is a release type event.
     bool releaseResources = pk->getType() == RELEASE || pk->getType() == REJECTED || pk->getType() == ENDFLOW || pk->getType() == CROUTEFLOWEND || pk->getType() == RELEASEBREAK || (pk->getType()== DATATYPE && pk->getLast()); // end a call
@@ -2272,7 +2272,7 @@ void FlowRouting::postProc(Packet *pk, const int & destAddr, const int & destId,
         checkPendingList();
 }
 
-void FlowRouting::handleMessage(cMessage *msg)
+void FlowForwarding::handleMessage(cMessage *msg)
 {
     //if (computeBwTimer == msg) {
     //    computeUsedBw();
@@ -2440,7 +2440,7 @@ void FlowRouting::handleMessage(cMessage *msg)
     postProc(pk, destAddr, destId, portForward);
 }
 
-void FlowRouting::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
+void FlowForwarding::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
 {
     Enter_Method_Silent();
     if (signalID == eventSignal) {
@@ -2455,7 +2455,7 @@ void FlowRouting::receiveSignal(cComponent *source, simsignal_t signalID, cObjec
     }
 }
 
-void FlowRouting::processChangeRoutes(ChangeRoutingTable *obj)
+void FlowForwarding::processChangeRoutes(ChangeRoutingTable *obj)
 {
     // end flee flows
 
@@ -2501,7 +2501,7 @@ void FlowRouting::processChangeRoutes(ChangeRoutingTable *obj)
     }
 }
 
-void FlowRouting::finish()
+void FlowForwarding::finish()
 {
     recordScalar("Total calls rejected",callLost);
     //recordScalar("Total calls received",callReceived);

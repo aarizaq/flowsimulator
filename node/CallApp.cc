@@ -504,7 +504,7 @@ void CallApp::newCall() {
 
     DijkstraFuzzy::Route r1, r2, min;
 
-    if (routingModule->getRoutingType() == IRoutingModule::BACKUPROUTE || routingModule->getRoutingType() == IRoutingModule::BACKUPROUTEKSH) {
+    if (routingModule->getRoutingType() == IRouting::BACKUPROUTE || routingModule->getRoutingType() == IRouting::BACKUPROUTEKSH) {
         routingModule->getRoute(destAddress,r1,r2);
         // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
         // new call id for backup route
@@ -527,6 +527,7 @@ void CallApp::newCall() {
     }
     else {
         routingModule->getRoute(destAddress,r1,r2);
+        pk->setRouteArraySize(r1.size());
         for (unsigned int i = 0; i < r1.size(); i++) {
             pk->setRoute(i, r1[i]);
         }
@@ -900,7 +901,7 @@ void CallApp::procFlowPk(Packet *pk) {
         if (flowId.callId() > 0) {
             auto itAux = activeCalls.find(flowId.callId());
             if (itAux == activeCalls.end())
-                throw cRuntimeError("Call id not found but flow recieved");
+                throw cRuntimeError("Call id not found but flow received");
             CallInfo * callInfo = itAux->second;
             bytesTraceRec(callInfo);
 
@@ -1123,7 +1124,7 @@ void CallApp::initialize()
     packetSize = &par("packetSize");
     flowPacketSize = &par("flowPacketSize");
 
-    residual = par("useHyperbolic").boolValue();
+
 
     callCounter = 0;
     if (par("packetMode"))
@@ -1148,7 +1149,7 @@ void CallApp::initialize()
 #endif
 
 
-    routingModule = check_and_cast<IRoutingModule *>(this->getParentModule()->getSubmodule("routing"));
+    routingModule = check_and_cast<IRouting *>(this->getParentModule()->getSubmodule("routing"));
 
 
     if (par("independentFlows").boolValue() && !destAddresses.empty()) {

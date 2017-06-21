@@ -30,12 +30,12 @@ module Node
                 address = address;
                 @display("p=140,60,row");
         }
-        routing: RoutingModule {
+        routing: <default("RoutingModule")> like IRouting {
             parameters:
                  @display("p=80,130");
         }
         
-        forwarding: FlowRouting {
+        forwarding: <default("FlowForwarding")> like IForwarding {
             parameters:
                 @display("p=140,130");
             gates:

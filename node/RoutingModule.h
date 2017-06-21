@@ -18,22 +18,23 @@
 
 #include <omnetpp/csimplemodule.h>
 
-#include "IRoutingModule.h"
 #include "DijkstraFuzzy.h"
 #include "Packet_m.h"
 #include "DijktraKShortest.h"
 #include "IForwarding.h"
+#include "IRouting.h"
 
 using namespace omnetpp;
 
-class RoutingModule: public cSimpleModule, IRoutingModule, cListener {
+class RoutingModule: public cSimpleModule, public IRouting, protected cListener {
 public:
     RoutingModule();
     virtual ~RoutingModule();
     virtual void getRoute(int, std::vector<int> &, std::vector<int> &) override;
-    virtual void setRoutingType(const IRoutingModule::RoutingType & a) override;
-    virtual IRoutingModule::RoutingType getRoutingType() override;
+    virtual void setRoutingType(const IRouting::RoutingType & a) override;
+    virtual IRouting::RoutingType getRoutingType() override;
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
+    virtual void receiveSignal(cComponent *source, simsignal_t signalID, bool change, cObject *details) override;
 
 protected:
     int myAddress;
@@ -49,6 +50,8 @@ protected:
 
     std::vector<int> destination;
 
+    bool actualizeForwarding = false;
+
     DijkstraFuzzy *dijFuzzy = nullptr;
     Dijkstra *dijkstra = nullptr;
     DijkstraKshortest *dijkstraks = nullptr;
@@ -59,7 +62,8 @@ protected:
 
     RoutingType rType;
     virtual void readTopo();
-    virtual void initialize() override;
+    virtual int numInitStages() const override {return 2;}
+    virtual void initialize(int) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void procActualize(Actualize *pkt);
 

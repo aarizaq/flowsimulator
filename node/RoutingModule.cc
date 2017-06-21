@@ -15,6 +15,9 @@
 
 #include "RoutingModule.h"
 
+
+Define_Module(RoutingModule);
+
 simsignal_t RoutingModule::actualizationPortsSignal = registerSignal("actualizationPortsSignal");
 simsignal_t RoutingModule::actualizationSignal = registerSignal("actualizationSignal");
 simsignal_t RoutingModule::changeRoutingTableSignal = registerSignal("changeRoutingTableSignal");
@@ -32,14 +35,15 @@ RoutingModule::~RoutingModule() {
         delete dijFuzzy;
     if (dijkstra)
         delete dijkstra;
+    cancelAndDelete(nextAct);
 }
 
-void RoutingModule::setRoutingType(const IRoutingModule::RoutingType & a)
+void RoutingModule::setRoutingType(const IRouting::RoutingType & a)
 {
     rType = a;
 }
 
-IRoutingModule::RoutingType RoutingModule::getRoutingType()
+IRouting::RoutingType RoutingModule::getRoutingType()
 {
     return rType;
 }
@@ -283,7 +287,6 @@ void RoutingModule::readTopo()
     }
     NodePairs links;
     dj.discoverAllPartitionedLinks(links);
-
 }
 
 
@@ -386,19 +389,32 @@ void RoutingModule::procActualize(Actualize *pkt)
 void RoutingModule::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
 {
     Enter_Method_Silent();
-
-    Actualize *pkt = dynamic_cast<Actualize *>(obj);
-    if (pkt == nullptr || dijFuzzy == nullptr) {
-        throw cRuntimeError("Sennal no esperada");
-        return; //
+    if (actualizationSignal == signalID) {
+        Actualize *pkt = dynamic_cast<Actualize *>(obj);
+        if (pkt == nullptr || dijFuzzy == nullptr) {
+            throw cRuntimeError("Sennal no esperada");
+            return; //
+        }
+        procActualize(pkt);
+        if (!nextAct->isSelfMessage())
+            scheduleAt(simTime(),nextAct);
     }
-    procActualize(pkt);
+}
+
+void RoutingModule::receiveSignal(cComponent *source, simsignal_t signalID, bool change, cObject *details)
+{
+    Enter_Method_Silent();
+
+    if (signalID != actualizationPortsSignal)
+        return;
+    // TODO:
 }
 
 
-void RoutingModule::initialize()
+void RoutingModule::initialize(int stage)
 {
-    myAddress = par("address");
+    if (stage == 0)
+        return;
 
     residual = par("useHyperbolic").boolValue();
 
@@ -453,6 +469,25 @@ void RoutingModule::initialize()
     cModule * mod = gate("out")->getPathEndGate()->getOwnerModule();
     forwarding = check_and_cast<IForwarding *> (mod);
 
+    myAddress = forwarding->getAddress();
+
+    dijkstra->setRoot(myAddress);
+    dijkstra->run();
+
+    // TODO: actualize forwarding
+    for (auto elem : destination) {
+        if (elem == myAddress)
+            continue;
+        int oldPort = forwarding->getRouting(elem);
+        std::vector<NodeId> pathNode;
+        dijkstra->getRoute(elem, pathNode);
+
+        int newPort = forwarding->getNeighborConnectPort(pathNode[1]);
+        if (oldPort != newPort) {
+            forwarding->setRoute(elem,newPort);
+        }
+    }
+
     // register in the root module to receive the actualization of all nodes.
     cSimulation::getActiveSimulation()->getSystemModule()->subscribe(actualizationSignal,this);
     this->getParentModule()->subscribe(actualizationPortsSignal,this);
@@ -460,6 +495,32 @@ void RoutingModule::initialize()
 
 void RoutingModule::handleMessage(cMessage *msg)
 {
+
+    if (nextAct == msg) {
+        if (actualizeForwarding) {
+            dijkstra->setRoot(myAddress);
+            dijkstra->run();
+
+            for (auto elem : destination) {
+                if (elem == myAddress)
+                    continue;
+                int oldPort = forwarding->getRouting(elem);
+                std::vector<NodeId> pathNode;
+                dijkstra->getRoute(elem, pathNode);
+
+                int newPort = forwarding->getNeighborConnectPort(pathNode[1]);
+                if (oldPort != newPort) {
+                    forwarding->setRoute(elem, newPort);
+                    ChangeRoutingTable changeRoutingTable;
+                    changeRoutingTable.destination = elem;
+                    changeRoutingTable.newPort = newPort;
+                    changeRoutingTable.oldPort = oldPort;
+                    emit(changeRoutingTableSignal, &changeRoutingTable);
+                }
+            }
+        }
+        return;
+    }
 
     if (!msg->isPacket()) {
         delete msg;
@@ -482,25 +543,26 @@ void RoutingModule::handleMessage(cMessage *msg)
         delete msg;
     }
 
-    dijkstra->setRoot(myAddress);
-    dijkstra->run();
+    if (actualizeForwarding) {
+        dijkstra->setRoot(myAddress);
+        dijkstra->run();
 
-    // TODO: actualize forwarding
-    for (auto elem : destination) {
-        if (elem == myAddress)
-            continue;
-        int oldPort = forwarding->getRouting(elem);
-        std::vector<NodeId> pathNode;
-        dijkstra->getRoute(elem, pathNode);
+        for (auto elem : destination) {
+            if (elem == myAddress)
+                continue;
+            int oldPort = forwarding->getRouting(elem);
+            std::vector<NodeId> pathNode;
+            dijkstra->getRoute(elem, pathNode);
 
-        int newPort = forwarding->getNeighborConnectPort(pathNode[1]);
-        if (oldPort != newPort) {
-            forwarding->setRoute(elem,newPort);
-            ChangeRoutingTable changeRoutingTable;
-            changeRoutingTable.destination = elem;
-            changeRoutingTable.newPort = newPort;
-            changeRoutingTable.oldPort = oldPort;
-            emit(changeRoutingTableSignal,&changeRoutingTable);
+            int newPort = forwarding->getNeighborConnectPort(pathNode[1]);
+            if (oldPort != newPort) {
+                forwarding->setRoute(elem, newPort);
+                ChangeRoutingTable changeRoutingTable;
+                changeRoutingTable.destination = elem;
+                changeRoutingTable.newPort = newPort;
+                changeRoutingTable.oldPort = oldPort;
+                emit(changeRoutingTableSignal, &changeRoutingTable);
+            }
         }
     }
     return;

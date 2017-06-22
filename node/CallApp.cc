@@ -356,7 +356,7 @@ void CallApp::newCallPacket(CallInfo *callInfo)
                 throw cRuntimeError("Call state Error");
 
 
-            if (simTime() + callInfo->interArrivalTime <= elem.first)
+            if (simTime() + callInfo->interArrivalTime < elem.first)
                 CallPacketsEvents.insert(std::make_pair(simTime() + callInfo->interArrivalTime, callInfo));
             else if (simTime() > elem.first)
                 throw cRuntimeError("CallEvents Scheduler error compute time off");

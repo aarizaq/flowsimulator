@@ -1706,7 +1706,7 @@ bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int
     // consume bandwidth
     if (portForward != -1) {
 
-        if (portDataArray[portForward].flowOcupation > pk->getReserve()) {
+        if (portDataArray[portForward].flowOcupation >= pk->getReserve()) {
             portDataArray[portForward].flowOcupation -= pk->getReserve();
             ChangeBw val;
             val.instant = simTime();

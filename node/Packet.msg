@@ -82,7 +82,5 @@ packet Packet extends Base
  
 packet Actualize extends Packet
 {
-    LinkData linkData[];
-    int type @enum(PacketCode);
-   
+    LinkData linkData[]; 
 }

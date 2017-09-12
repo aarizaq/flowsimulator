@@ -15,8 +15,10 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#include "failureModule.h"
+
 #include <stdlib.h>     /* atoi */
+#include "FailureModule.h"
+
 
 Define_Module(FailureModule);
 

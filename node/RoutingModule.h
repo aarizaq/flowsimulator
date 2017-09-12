@@ -18,6 +18,7 @@
 
 #include <omnetpp/csimplemodule.h>
 
+#include "Dijkstra.h"
 #include "DijkstraFuzzy.h"
 #include "Packet_m.h"
 #include "DijktraKShortest.h"

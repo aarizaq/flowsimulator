@@ -30,7 +30,6 @@ protected:
 private:
     // configuration
     int myAddress;
-    bool packetMode = false;
     std::vector<int> destAddresses;
     cPar *callArrival = nullptr;
     cPar *callReserve = nullptr;

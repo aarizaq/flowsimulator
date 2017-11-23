@@ -2,6 +2,7 @@
  * DataTypes.h
  *
  *  Created on: Mar 30, 2016
+ *  Copyright (C) 2017 Alfonso Ariza
  *      Author: alfonso
  */
 
@@ -184,8 +185,8 @@ struct PortData
 {
     uint64_t occupation;
     uint64_t nominalbw;
-    uint64_t flowOcupation;
-    uint64_t lastInfoOcupation;
+    uint64_t flowOccupation;
+    uint64_t lastInfoOccupation;
     uint64_t lastInfoNominal;
     LinkState portStatus = UP;
     bool overload = false;

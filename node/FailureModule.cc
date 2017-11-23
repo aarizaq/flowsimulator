@@ -1,5 +1,6 @@
 //
 // Copyright (C)Author: alfonso ariza quintana, Universidad de Malaga
+// Copyright (C) 2017 Alfonso Ariza
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -32,7 +33,7 @@ std::ostream& operator<<(std::ostream& os, const Event& e)
 };
 
 
-std::string FailureModule::detailedInfo() const
+std::string FailureModule::str() const
 {
     std::stringstream out;
 

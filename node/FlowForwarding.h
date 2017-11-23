@@ -38,7 +38,7 @@ private:
     double reserveCall = 0; // quantity that determine if flows not assigned to call must be accepted or not, 0 implies that they must accept it of possible, not reservation, 1 only accept call flows
     double reserveFlows = 0; //similar to previous, but with the bandwidth used in the port
 
-    long callRequest = 0;
+    //long callRequest = 0;
     long callLost = 0;
     long numDrop = 0;
 

@@ -2,6 +2,7 @@
  * FailureEvent.h
  *
  *  Created on: Mar 3, 2016
+ *  Copyright (C) 2017 Alfonso Ariza
  *      Author: alfonso
  */
 

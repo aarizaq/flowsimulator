@@ -1,5 +1,6 @@
 //
 // Copyright (C)Author: alfonso ariza quintana, Universidad de Malaga
+// Copyright (C) 2017 Alfonso Ariza
 //
 // This file is distributed WITHOUT ANY WARRANTY. See the file
 // `license' for details on this and other legal matters.
@@ -47,8 +48,8 @@ private:
     //
     time_t initTime;
 
-    double maxCapacity = 0;
-    bool useAlpha = false;
+    //double maxCapacity = 0;
+    //bool useAlpha = false;
 
 
 
@@ -149,7 +150,7 @@ private:
     std::map<uint64_t, CallInfo*> backupCalls;
     std::list<Packet *> listPendingRelease;
 
-    bool check = false;
+    //bool check = false;
 
     std::vector<double> percentajesValues;
     std::vector<double> sanctionValues;

@@ -1,5 +1,6 @@
 //
 // Copyright (C)Author: alfonso ariza quintana, Universidad de Malaga
+// Copyright (C) 2017 Alfonso Ariza
 //
 //
 // This program is free software: you can redistribute it and/or modify
@@ -70,7 +71,7 @@ public:
     FailureModule();
     virtual ~FailureModule();
     virtual void parser(cXMLElement *rootelement);
-    virtual std::string detailedInfo() const override;
+    virtual std::string str() const override;
 };
 
 #endif /* FAILUREMODULE_H_ */

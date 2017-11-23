@@ -3,6 +3,7 @@
 //
 // Copyright (C) 1992-2008 Andras Varga
 // Copyright (C) 2016 Alfonso Ariza
+// Copyright (C) 2017 Alfonso Ariza
 //
 // This file is distributed WITHOUT ANY WARRANTY. See the file
 // `license' for details on this and other legal matters.
@@ -263,7 +264,7 @@ void FlowForwarding::initialize()
     for (unsigned int i = 0; i < portDataArray.size(); i++) {
         cChannel * channel = node->gate("port$o", i)->getTransmissionChannel();
         portDataArray[i].occupation = channel->getNominalDatarate();
-        portDataArray[i].flowOcupation = channel->getNominalDatarate();
+        portDataArray[i].flowOccupation = channel->getNominalDatarate();
         portDataArray[i].nominalbw = channel->getNominalDatarate();
 
         portDataArray[i].max = portDataArray[i].occupation;
@@ -274,7 +275,7 @@ void FlowForwarding::initialize()
         portDataArray[i].overload = false;
         ChangeBw val;
         val.instant = simTime();
-        val.value = portDataArray[i].flowOcupation;
+        val.value = portDataArray[i].flowOccupation;
         recordOccupation(portDataArray[i], val);
         for (auto elem: neighbors) {
             if (elem.second.port == (int)i) {
@@ -351,7 +352,7 @@ bool FlowForwarding::actualize(Actualize *other)
         if (portDataArray[elem.second.port].portStatus == UP) {
             auxdata.residual = portDataArray[elem.second.port].occupation;
             auxdata.nominal = portDataArray[elem.second.port].nominalbw;
-            auxdata.actual = portDataArray[elem.second.port].flowOcupation;
+            auxdata.actual = portDataArray[elem.second.port].flowOccupation;
             if (simTime() == simtime_t::ZERO)
             {
                 auxdata.max = portDataArray[elem.second.port].occupation;
@@ -363,14 +364,14 @@ bool FlowForwarding::actualize(Actualize *other)
                 auxdata.min = portDataArray[elem.second.port].min;
                 auxdata.mean = portDataArray[elem.second.port].mean;
             }
-            portDataArray[elem.second.port].lastInfoOcupation = portDataArray[elem.second.port].occupation;
+            portDataArray[elem.second.port].lastInfoOccupation = portDataArray[elem.second.port].occupation;
             portDataArray[elem.second.port].lastInfoNominal = portDataArray[elem.second.port].nominalbw;
         }
         else if (portDataArray[elem.second.port].portStatus  == DOWN) {
             auxdata.residual = 0;
             auxdata.nominal = 0;
             if (portDataArray[elem.second.port].lastInfoNominal !=0) {
-                portDataArray[elem.second.port].lastInfoOcupation = 0;
+                portDataArray[elem.second.port].lastInfoOccupation = 0;
                 portDataArray[elem.second.port].lastInfoNominal = 0;
             }
         }
@@ -406,10 +407,10 @@ bool FlowForwarding::actualizePercentaje()
         LinkData auxdata;
         auxdata.node = elem.first;
         if (elem.second.state == UP) {
-            if ((fabs((double)portDataArray[elem.second.port].lastInfoOcupation - (double)portDataArray[elem.second.port].occupation)/(double)portDataArray[elem.second.port].occupation)>par("percentage").doubleValue()) {
+            if ((fabs((double)portDataArray[elem.second.port].lastInfoOccupation - (double)portDataArray[elem.second.port].occupation)/(double)portDataArray[elem.second.port].occupation)>par("percentage").doubleValue()) {
                 auxdata.residual = portDataArray[elem.second.port].occupation;
                 auxdata.nominal = portDataArray[elem.second.port].nominalbw;
-                portDataArray[elem.second.port].lastInfoOcupation = portDataArray[elem.second.port].occupation;
+                portDataArray[elem.second.port].lastInfoOccupation = portDataArray[elem.second.port].occupation;
                 portDataArray[elem.second.port].lastInfoNominal = portDataArray[elem.second.port].nominalbw;
                 statedata.push_back(auxdata);
             }
@@ -418,7 +419,7 @@ bool FlowForwarding::actualizePercentaje()
             auxdata.residual = 0;
             auxdata.nominal = 0;
             if (portDataArray[elem.second.port].lastInfoNominal !=0) {
-                portDataArray[elem.second.port].lastInfoOcupation = 0;
+                portDataArray[elem.second.port].lastInfoOccupation = 0;
                 portDataArray[elem.second.port].lastInfoNominal = 0;
                 statedata.push_back(auxdata);
             }
@@ -602,18 +603,18 @@ bool FlowForwarding::sendChangeFlow(FlowInfo &flow, const int &portForward)
 
     FlowInfo *outflowPtr = nullptr;
     if (itF != outputFlows.end()) {
-        portDataArray[itF->second.port].flowOcupation += itF->second.used;
+        portDataArray[itF->second.port].flowOccupation += itF->second.used;
         itF->second.port = portForward;
         outflowPtr = &(itF->second);
         ChangeBw val;
         val.instant = simTime();
-        val.value = portDataArray[itF->second.port].flowOcupation;
+        val.value = portDataArray[itF->second.port].flowOccupation;
         recordOccupation(portDataArray[itF->second.port], val);
     }
     flow.port = portForward;
 
     if (portForward != -1) {
-        if (portDataArray[portForward].flowOcupation > pkt->getReserve()) {
+        if (portDataArray[portForward].flowOccupation > pkt->getReserve()) {
             outputFlows[flow.identify] = flow;
         }
         else {
@@ -677,7 +678,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                     for (unsigned int i = 0; i < portDataArray.size(); i++) {
                         portDataArray[i].occupation = 0;
                         portDataArray[i].portStatus = DOWN;
-                        //lastInfoOcupation[i] = ocupation[i];
+                        //lastInfoOccupation[i] = occupation[i];
                         //lastInfoNominal[i] = nominalbw[i];
                     }
                     // es necesario terminar los flujos hacia arriba inmediatamente
@@ -781,7 +782,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                     }
                     for (unsigned int i = 0; i < portDataArray.size(); i++) {
                         portDataArray[i].occupation = portDataArray[i].nominalbw;
-                        portDataArray[i].flowOcupation = portDataArray[i].nominalbw;
+                        portDataArray[i].flowOccupation = portDataArray[i].nominalbw;
                         portDataArray[i].portStatus = UP;
                         portDataArray[i].max = portDataArray[i].occupation;
                         portDataArray[i].min = portDataArray[i].occupation;
@@ -789,7 +790,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
 
                         ChangeBw val;
                         val.instant = simTime();
-                        val.value = portDataArray[i].flowOcupation;
+                        val.value = portDataArray[i].flowOccupation;
                         recordOccupation(portDataArray[i], val);
                         actualizePercentaje();
                     }
@@ -818,10 +819,10 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                     if (itCallInfo->second.port1 == itNeig->second.port
                             || itCallInfo->second.port2 == itNeig->second.port) {
                         //if (itCallInfo->second.port1 >= 0)
-                        //    ocupation[itCallInfo->second.port1] += itCallInfo->second.reserve;
+                        //    occupation[itCallInfo->second.port1] += itCallInfo->second.reserve;
 
                         //if (itCallInfo->second.port2 >= 0)
-                        //    ocupation[itCallInfo->second.port2] += itCallInfo->second.reserve;
+                        //    occupation[itCallInfo->second.port2] += itCallInfo->second.reserve;
                         breakCommunication.insert(std::make_pair(itCallInfo->first,itCallInfo->second));
                         callInfomap.erase(itCallInfo++);
                     }
@@ -834,10 +835,10 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                         elem.second.outputFlows.pop_back();
                         if (flowinfo.port != itNeig->second.port) {
                             // free bandwidth
-                            portDataArray[flowinfo.port].flowOcupation += flowinfo.used;
+                            portDataArray[flowinfo.port].flowOccupation += flowinfo.used;
                             ChangeBw val;
                             val.instant = simTime();
-                            val.value = portDataArray[flowinfo.port].flowOcupation;
+                            val.value = portDataArray[flowinfo.port].flowOccupation;
                             recordOccupation(portDataArray[flowinfo.port], val);
                             // Send end flow
                             Packet *pkt = new Packet();
@@ -1012,7 +1013,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                 getListFlowsToModifyStartFlow(itNeig->second.port, listFlowsToModify,listFlowsToModifyInput);
 
                 if (portDataArray[itNeig->second.port].occupation != portDataArray[itNeig->second.port].nominalbw)
-                    throw cRuntimeError("Restore link, ocupation %llu nominal %llu",
+                    throw cRuntimeError("Restore link, occupation %llu nominal %llu",
                             portDataArray[itNeig->second.port].occupation, portDataArray[itNeig->second.port].nominalbw);
 
                 if (!listFlowsToModifyInput.empty()) {
@@ -1024,7 +1025,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
 
                 }
                 // if (simTime() - itNeig->second.failureTime > par("breakRelease"))
-                //     ocupation[itNeig->second.port] = nominalbw[itNeig->second.port];
+                //     occupation[itNeig->second.port] = nominalbw[itNeig->second.port];
 
             }
             if (inmediateNotificationLink)
@@ -1200,11 +1201,11 @@ void FlowForwarding::checkPendingList()
         for (auto it = delayedFlows.begin();it != delayedFlows.end();) { // search the first that you can send
         // proc
             simtime_t delay = it->end - it->start;
-            if (it->port != -1 && portDataArray[it->port].flowOcupation > it->used && portDataArray[it->port].portStatus == UP) {
-                portDataArray[it->port].flowOcupation -= it->used;
+            if (it->port != -1 && portDataArray[it->port].flowOccupation > it->used && portDataArray[it->port].portStatus == UP) {
+                portDataArray[it->port].flowOccupation -= it->used;
                 ChangeBw val;
                 val.instant = simTime();
-                val.value = portDataArray[it->port].flowOcupation;
+                val.value = portDataArray[it->port].flowOccupation;
                 recordOccupation(portDataArray[it->port], val);
                 Packet *pkStartFlow = new Packet();
                 it->delayed = true;
@@ -1316,11 +1317,11 @@ void FlowForwarding::checkPendingList()
                 continue;
             }
 
-            if (it->port != -1 && portDataArray[it->port].flowOcupation > it->used && portDataArray[it->port].portStatus == UP) {
-                portDataArray[it->port].flowOcupation -= it->used;
+            if (it->port != -1 && portDataArray[it->port].flowOccupation > it->used && portDataArray[it->port].portStatus == UP) {
+                portDataArray[it->port].flowOccupation -= it->used;
                 ChangeBw val;
                 val.instant = simTime();
-                val.value = portDataArray[it->port].flowOcupation;
+                val.value = portDataArray[it->port].flowOccupation;
                 recordOccupation(portDataArray[it->port], val);
                 Packet *pkStartFlow = new Packet();
                 if (!full)
@@ -1536,10 +1537,10 @@ bool FlowForwarding::procStartFlow(Packet *pk, const int & portForward, const in
             if (itFlow != outputFlows.end()) {
                 // reset bandwidth
                 if (portDataArray[itFlow->second.port].portStatus == UP) {
-                    portDataArray[itFlow->second.port].flowOcupation += itFlow->second.used;
+                    portDataArray[itFlow->second.port].flowOccupation += itFlow->second.used;
                     ChangeBw val;
                     val.instant = simTime();
-                    val.value = portDataArray[itFlow->second.port].flowOcupation;
+                    val.value = portDataArray[itFlow->second.port].flowOccupation;
                     recordOccupation(portDataArray[itFlow->second.port], val);
                 }
             }
@@ -1573,7 +1574,7 @@ bool FlowForwarding::procStartFlow(Packet *pk, const int & portForward, const in
                 return false;
             }
             double limitflow = (double) portDataArray[portForward].nominalbw * reserveFlows;
-            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOcupation) {
+            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOccupation) {
                 delete pk;
                 return false;
             }
@@ -1582,11 +1583,11 @@ bool FlowForwarding::procStartFlow(Packet *pk, const int & portForward, const in
 
     // consume bandwidth
     if (portForward != -1) {
-        if (portDataArray[portForward].flowOcupation > pk->getReserve()) {
-            portDataArray[portForward].flowOcupation -= pk->getReserve();
+        if (portDataArray[portForward].flowOccupation > pk->getReserve()) {
+            portDataArray[portForward].flowOccupation -= pk->getReserve();
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[portForward].flowOcupation;
+            val.value = portDataArray[portForward].flowOccupation;
             recordOccupation(portDataArray[portForward], val);
 
             if (itCallInfo != callInfomap.end())
@@ -1686,7 +1687,7 @@ bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int
                 return false;
             }
             double limitflow = (double) portDataArray[portForward].nominalbw * reserveFlows;
-            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOcupation) {
+            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOccupation) {
                 numDrop++;
                 emit(dropSignal,numDrop);
                 delete pk;
@@ -1706,11 +1707,11 @@ bool FlowForwarding::procDataType(Packet *pk, const int & portForward, const int
     // consume bandwidth
     if (portForward != -1) {
 
-        if (portDataArray[portForward].flowOcupation >= pk->getReserve()) {
-            portDataArray[portForward].flowOcupation -= pk->getReserve();
+        if (portDataArray[portForward].flowOccupation >= pk->getReserve()) {
+            portDataArray[portForward].flowOccupation -= pk->getReserve();
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[portForward].flowOcupation;
+            val.value = portDataArray[portForward].flowOccupation;
             recordOccupation(portDataArray[portForward], val);
 
             if (callInfo != nullptr)
@@ -1814,11 +1815,11 @@ bool FlowForwarding::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOut
                 uint64_t oc = 0;
                 for (auto elem : listFlowsToModify)
                     oc += elem->used;
-                portDataArray[portForward].flowOcupation = portDataArray[portForward].nominalbw - oc;
+                portDataArray[portForward].flowOccupation = portDataArray[portForward].nominalbw - oc;
                 portDataArray[portForward].overload = true;
                 ChangeBw val;
                 val.instant = simTime();
-                val.value = portDataArray[portForward].flowOcupation;
+                val.value = portDataArray[portForward].flowOccupation;
 
                 recordOccupation(portDataArray[portForward], val);
                 // enviar mensajes de actualización del flujo.
@@ -1951,10 +1952,10 @@ bool FlowForwarding::procFlowChange(Packet *pk, const int & portForward, const i
 
         // free the used bandwidth
         if (flowInfoOutputPtr) {
-            portDataArray[portForward].flowOcupation += flowInfoOutputPtr->used;
+            portDataArray[portForward].flowOccupation += flowInfoOutputPtr->used;
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[portForward].flowOcupation;
+            val.value = portDataArray[portForward].flowOccupation;
             recordOccupation(portDataArray[portForward], val);
         }
 
@@ -1966,7 +1967,7 @@ bool FlowForwarding::procFlowChange(Packet *pk, const int & portForward, const i
                 return false;
             }
             double limitflow = (double) portDataArray[portForward].nominalbw * reserveFlows;
-            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOcupation) {
+            if (limitflow > 0 && limitflow <= (double) portDataArray[portForward].flowOccupation) {
                 delete pk;
                 return false;
             }
@@ -1975,11 +1976,11 @@ bool FlowForwarding::procFlowChange(Packet *pk, const int & portForward, const i
 
     // consume bandwidth
     if (portForward != -1) {
-        if (portDataArray[portForward].flowOcupation > pk->getReserve()) {
-            portDataArray[portForward].flowOcupation -= pk->getReserve();
+        if (portDataArray[portForward].flowOccupation > pk->getReserve()) {
+            portDataArray[portForward].flowOccupation -= pk->getReserve();
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[portForward].flowOcupation;
+            val.value = portDataArray[portForward].flowOccupation;
 
             recordOccupation(portDataArray[portForward], val);
             if (flowInfoOutputPtr != nullptr)
@@ -2053,10 +2054,10 @@ bool FlowForwarding::procEndFlowLost(Packet *pk)
             // throw cRuntimeError("Error Flow id not found reserved");
         }
         if (it->port != -1) {
-            portDataArray[it->port].flowOcupation += it->used;
+            portDataArray[it->port].flowOccupation += it->used;
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[it->port].flowOcupation;
+            val.value = portDataArray[it->port].flowOccupation;
             recordOccupation(portDataArray[it->port], val);
         }
         itCallInfo->second.outputFlows.erase(it);
@@ -2078,10 +2079,10 @@ bool FlowForwarding::procEndFlowLost(Packet *pk)
 
         inputFlows.erase(itFlowInput);
         if (itFlowOutput != outputFlows.end()) {
-            portDataArray[itFlowOutput->second.port].flowOcupation += itFlowOutput->second.used;
+            portDataArray[itFlowOutput->second.port].flowOccupation += itFlowOutput->second.used;
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[itFlowOutput->second.port].flowOcupation;
+            val.value = portDataArray[itFlowOutput->second.port].flowOccupation;
             recordOccupation(portDataArray[itFlowOutput->second.port], val);
             outputFlows.erase(itFlowOutput);
         }
@@ -2174,10 +2175,10 @@ bool FlowForwarding::procEndFlowStoreAndForward(Packet *pk)
         }
 
         if (itOut->port != -1) {
-            portDataArray[itOut->port].flowOcupation += itOut->used;
+            portDataArray[itOut->port].flowOccupation += itOut->used;
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[itOut->port].flowOcupation;
+            val.value = portDataArray[itOut->port].flowOccupation;
             recordOccupation(portDataArray[itOut->port], val);
         }
         itCallInfo->second.outputFlows.erase(itOut);
@@ -2203,10 +2204,10 @@ bool FlowForwarding::procEndFlowStoreAndForward(Packet *pk)
                 scheduleAt(simTime()+itFlowOutput->second.delay,pk);
                 return (false);
             }
-            portDataArray[itFlowOutput->second.port].flowOcupation += itFlowOutput->second.used;
+            portDataArray[itFlowOutput->second.port].flowOccupation += itFlowOutput->second.used;
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[itFlowOutput->second.port].flowOcupation;
+            val.value = portDataArray[itFlowOutput->second.port].flowOccupation;
             recordOccupation(portDataArray[itFlowOutput->second.port], val);
             outputFlows.erase(itFlowOutput);
         }
@@ -2400,10 +2401,10 @@ void FlowForwarding::handleMessage(cMessage *msg)
             // It is necessary to erase all flows of the same call
             // search, and delete flows
             for (auto elem : itCallInfo->second.outputFlows) {
-                portDataArray[elem.port].flowOcupation += elem.used;
+                portDataArray[elem.port].flowOccupation += elem.used;
                 ChangeBw val;
                 val.instant = simTime();
-                val.value = portDataArray[elem.port].flowOcupation;
+                val.value = portDataArray[elem.port].flowOccupation;
                 recordOccupation(portDataArray[elem.port], val);
             }
             if (!pendingFlows.empty()) {
@@ -2488,15 +2489,15 @@ void FlowForwarding::processChangeRoutes(ChangeRoutingTable *obj)
                 pkt->setName(pkname);
             }
             send(pkt->dup(), "out", obj->oldPort);
-            portDataArray[obj->oldPort].flowOcupation += elem.second.used;
+            portDataArray[obj->oldPort].flowOccupation += elem.second.used;
             ChangeBw val;
             val.instant = simTime();
-            val.value = portDataArray[obj->oldPort].flowOcupation;
+            val.value = portDataArray[obj->oldPort].flowOccupation;
             recordOccupation(portDataArray[obj->oldPort], val);
             // move to new port
             pkt->setType(STARTFLOW);
-            if (portDataArray[obj->newPort].flowOcupation > elem.second.used) {
-                portDataArray[obj->newPort].flowOcupation -= elem.second.used;
+            if (portDataArray[obj->newPort].flowOccupation > elem.second.used) {
+                portDataArray[obj->newPort].flowOccupation -= elem.second.used;
                 simtime_t t = SimTime(2,SIMTIME_PS);
                 sendDelayed(pkt,t,"out", obj->newPort);
                 elem.second.port = obj->newPort;

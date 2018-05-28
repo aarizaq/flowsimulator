@@ -164,6 +164,8 @@ protected:
     void buildGamma2(Route&, Route&, const Route&, const Route&, const BreaksVect &, const LinkArray &, const NodeId &,
             const NodeId & t, const Route &, Route &);
 public:
+    void setAlpha(const double &d) {alpha =d;}
+    double getAlpha() {return alpha;}
     DijkstraFuzzy();
     DijkstraFuzzy(const DijkstraFuzzy& other);
     virtual ~DijkstraFuzzy();
@@ -174,6 +176,8 @@ public:
     virtual void cleanLinkArray();
     virtual void clearAll();
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double, double, double);
+    virtual void addLink(const NodeId & node1, const NodeId & node2, double, double, double);
+
     virtual void addEdge(const NodeId & originNode, Edge *edge);
     virtual void deleteEdge(const NodeId & originNode, const NodeId & last_node);
     virtual Edge * removeEdge(const NodeId & originNode, const NodeId & last_node);

@@ -150,6 +150,14 @@ void DijkstraFuzzy::addEdge(const NodeId & originNode, const NodeId & last_node,
     linkArray[originNode].push_back(link);
 }
 
+void DijkstraFuzzy::addLink(const NodeId & node1, const NodeId & node2, double cost, double cost2,
+        double cost3)
+{
+    addEdge(node1, node2, cost, cost2, cost3);
+    addEdge(node2, node1, cost, cost2, cost3);
+}
+
+
 void DijkstraFuzzy::addEdge(const NodeId & originNode, Edge *edge)
 {
     LinkArray::iterator it;

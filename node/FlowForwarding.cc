@@ -1258,7 +1258,7 @@ void FlowForwarding::checkPendingList()
         }
     }
 
-    int storeSize = par("storeAndForwardSize").longValue();
+    int storeSize = par("storeAndForwardSize").intValue();
     bool full = false;
     if (storeSize != -1) {
         int delayedFlow = 0;
@@ -2110,7 +2110,7 @@ bool FlowForwarding::procEndFlowStoreAndForward(Packet *pk)
             }
         }
     }
-    int storeSize = par("storeAndForwardSize").longValue();
+    int storeSize = par("storeAndForwardSize").intValue();
     bool full = false;
     if (storeSize != -1) {
         int delayedFlow = 0;

@@ -146,14 +146,14 @@ LinkId FailureModule::getNode(cXMLAttributeMap attributes)
         int numlink = node->getNumOutLinks();
         int linkid = omnetpp::intuniform(getEnvir()->getRNG(0), 0, numlink - 1);
         int remoteNodeId = node->getLinkOut(linkid)->getRemoteNode()->getModule()->par("address");
-        return std::make_pair(topo->getNode(nodeindex)->getModule()->par("address").longValue(), remoteNodeId);
+        return std::make_pair(topo->getNode(nodeindex)->getModule()->par("address").intValue(), remoteNodeId);
     }
     // nodo completo
     else if (!_hasKey(attributes, "node")) {
         // random
         int numNodes = topo->getNumNodes();
         int nodeindex = omnetpp::intuniform(getEnvir()->getRNG(0), 0, numNodes - 1);
-        return std::make_pair(topo->getNode(nodeindex)->getModule()->par("address").longValue(), -1);
+        return std::make_pair(topo->getNode(nodeindex)->getModule()->par("address").intValue(), -1);
     }
     // enlace de un nodo concreto, pero eleccion random
     else if (_hasKey(attributes, "link") || !_hasKey(attributes, "remotenode")) {
@@ -172,7 +172,7 @@ LinkId FailureModule::getNode(cXMLAttributeMap attributes)
         int numlink = node->getNumOutLinks();
         int linkid = omnetpp::intuniform(getEnvir()->getRNG(0), 0, numlink - 1);
         cTopology::Node *remote = node->getLinkOut(linkid)->getRemoteNode();
-        return std::make_pair(nodeId, remote->getModule()->par("address").longValue());
+        return std::make_pair(nodeId, remote->getModule()->par("address").intValue());
     }
     // enlace concreto entre 2 nodos
     else if (_hasKey(attributes, "remotenode")) {

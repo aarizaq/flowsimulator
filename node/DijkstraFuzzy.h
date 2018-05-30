@@ -163,6 +163,9 @@ protected:
             const NodeId & t, Route &);
     void buildGamma2(Route&, Route&, const Route&, const Route&, const BreaksVect &, const LinkArray &, const NodeId &,
             const NodeId & t, const Route &, Route &);
+
+    void getPairPaths(const Route &first, const Route &second, BreaksVect &VectBreaks, const LinkArray &A,
+            const NodeId &target, Route &gamma1, Route &gamma2);
 public:
     void setAlpha(const double &d) {alpha =d;}
     double getAlpha() {return alpha;}

@@ -1165,7 +1165,7 @@ void CallApp::initialize()
     send(msg, "out");
 
     initTime = time(nullptr);
-#if 0
+#if 1
     DijkstraFuzzy dijFuzzy;
     dijFuzzy.setAlpha(0.6);
     dijFuzzy.addLink(1, 2, 1, 2, 4);
@@ -1193,20 +1193,35 @@ void CallApp::initialize()
     dijFuzzy.setRoot(myAddress);
     dijFuzzy.setHasFindDisjoint(true);
     dijFuzzy.run();
+    std::ofstream myfile;
+    std::string name= "rutas"+std::to_string(myAddress)+".txt";
+    myfile.open (name);
+
     for (int i = 1; i <=12; i ++) {
         if (i == myAddress) continue;
         dijFuzzy.runDisjoint(i);
-
         DijkstraFuzzy::Route r1;
         DijkstraFuzzy::Route r2;
         if (dijFuzzy.checkDisjoint(i, r1, r2)) {
             // print routes
-
+            myfile << "Origin : " + std::to_string(myAddress);
+            myfile << "destination : " + std::to_string(i) << "\n";
+            myfile << "r1 : " ;
+            for (auto elem : r1) {
+                myfile << std::to_string(elem)+"-";
+            }
+            myfile << "\n";
+            myfile << "r2 : " ;
+            for (auto elem : r2) {
+                myfile << std::to_string(elem)+"-";
+            }
+            myfile << "\n";
         }
         else {
             throw cRuntimeError("ERROR");
         }
     }
+    myfile.close();
 #endif
 }
 

@@ -596,7 +596,8 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
     Route gamma2;
 
     if (!Vect_breaks.empty()) {
-        Pair_Paths(minPath, minPathD, Vect_breaks, linkArray, rootNode, target, gamma1, gamma2);
+        //Pair_Paths(minPath, minPathD, Vect_breaks, linkArray, rootNode, target, gamma1, gamma2);
+        getPairPaths(minPath, minPathD, Vect_breaks, linkArray, target, gamma1, gamma2);
     }
     else {
         gamma1 = minPath;
@@ -1018,6 +1019,94 @@ void DijkstraFuzzy::buildGamma2(Route& nextV_S, Route& nextV_Sp, const Route &Sp
         }
     }
 }
+
+
+void DijkstraFuzzy::getPairPaths(const Route &first, const Route &second, BreaksVect &VectBreaks, const LinkArray &A,
+        const NodeId &target, Route &gamma1, Route &gamma2)
+{
+
+    LinkArray modified;
+
+    for (auto it1 = first.begin(); it1 != first.end(); ++it1) {
+        auto it2 = it1+1;
+        if (it2 != first.end()) {
+            auto itAux = A.find(*it1);
+            if (itAux == A.end())
+                throw cRuntimeError("Link not found");
+            for (auto elem2 : itAux->second) {
+                if (elem2->last_node_ == (*it2)) {
+                    modified[*it1].push_back(elem2);
+                }
+            }
+        }
+    }
+
+    for (auto it1 = second.begin(); it1 != second.end(); ++it1) {
+        auto it2 = it1+1;
+        if (it2 != first.end()) {
+            auto itAux = A.find(*it1);
+            if (itAux == A.end())
+                throw cRuntimeError("Link not found");
+            for (auto elem2 : itAux->second) {
+                if (elem2->last_node_ == (*it2)) {
+                    modified[*it1].push_back(elem2);
+                }
+            }
+        }
+    }
+
+
+    // remove breaks
+    for (unsigned int i = 0; i < VectBreaks.size() / 2; i++) {
+        NodeId firstVertex = VectBreaks[2 * i];
+        NodeId secondVertex = VectBreaks[(2 * i) + 1];
+        auto itAux = modified.find(firstVertex);
+        if (itAux == modified.end())
+            throw cRuntimeError("Link not found");
+
+        for (auto it2 = itAux->second.begin(); it2 != itAux->second.end();)  {
+            if((*it2)->last_node_ == secondVertex) {
+                it2 = itAux->second.erase(it2);
+            }
+            else
+                ++it2;
+        }
+        if (itAux->second.empty()) {
+            modified.erase(itAux);
+        }
+    }
+    RouteMap routeMap;
+    runUntil(target, modified, routeMap);
+    FuzzyCost cost;
+    if (!getRoute(target, gamma1, routeMap, cost)){
+
+    }
+    // remove links
+    routeMap.clear();
+    for (unsigned int i = 0; i < gamma1.size() - 1; i++) {
+        NodeId firstVertex = gamma1[i];
+        NodeId secondVertex = gamma1[i+1];
+        auto itAux = modified.find(firstVertex);
+        if (itAux == modified.end())
+            throw cRuntimeError("Link not found");
+
+        for (auto it2 = itAux->second.begin(); it2 != itAux->second.end();)  {
+            if((*it2)->last_node_ == secondVertex) {
+                it2 = itAux->second.erase(it2);
+            }
+            else
+                ++it2;
+        }
+        if (itAux->second.empty()) {
+            modified.erase(itAux);
+        }
+    }
+    runUntil(target, modified, routeMap);
+    if (!getRoute(target, gamma2, routeMap, cost)){
+
+    }
+}
+
 
 void DijkstraFuzzy::Pair_Paths(const Route &S, const Route &Sp, BreaksVect &Vect_breaks, const LinkArray &A,
         const NodeId& s, const NodeId &t, Route &gamma1, Route &gamma2)

@@ -258,6 +258,24 @@ void DijkstraKshortest::deleteEdge(const NodeId & originNode, const NodeId & las
     }
 }
 
+
+DijkstraKshortest::Edge* DijkstraKshortest::removeEdge(const NodeId & originNode, const NodeId & last_node)
+{
+    auto it = linkArray.find(originNode);
+    if (it != linkArray.end()) {
+        for (auto itAux = it->second.begin(); itAux != it->second.end(); ++itAux) {
+            Edge *edge = *itAux;
+            if (last_node == edge->last_node_) {
+                it->second.erase(itAux);
+                return edge;
+            }
+        }
+    }
+    return nullptr;
+}
+
+
+
 void DijkstraKshortest::setRoot(const NodeId & dest_node)
 {
     rootNode = dest_node;

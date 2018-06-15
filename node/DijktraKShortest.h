@@ -208,6 +208,7 @@ public:
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost, double delay, double bw,
             double quality);
     virtual void deleteEdge(const NodeId &, const NodeId &);
+    virtual DijkstraKshortest::Edge* removeEdge(const NodeId &, const NodeId &);
     virtual void addEdgeWs(const NodeId & dest_node, const NodeId & last_node, double costAdd, double concave);
     virtual void addEdgeSw(const NodeId & dest_node, const NodeId & last_node, double costAdd, double concave);
     virtual void setRoot(const NodeId & dest_node);

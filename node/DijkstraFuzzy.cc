@@ -1074,6 +1074,20 @@ void DijkstraFuzzy::getPairPaths(const Route &first, const Route &second, Breaks
         if (itAux->second.empty()) {
             modified.erase(itAux);
         }
+
+        itAux = modified.find(secondVertex);
+        if (itAux == modified.end())
+            throw cRuntimeError("Link not found");
+        for (auto it2 = itAux->second.begin(); it2 != itAux->second.end();)  {
+            if((*it2)->last_node_ == firstVertex) {
+                it2 = itAux->second.erase(it2);
+            }
+            else
+                ++it2;
+        }
+        if (itAux->second.empty()) {
+            modified.erase(itAux);
+        }
     }
     RouteMap routeMap;
     runUntil(target, modified, routeMap);

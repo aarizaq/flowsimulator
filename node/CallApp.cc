@@ -14,6 +14,9 @@
 #include <fstream>
 #include "CallApp.h"
 #include <cinttypes>
+#include "DijkstraFuzzy.h"
+#include "DijktraKShortest.h"
+#include "DijktraKShortestFuzzy.h"
 
 uint64_t CallApp::callIdentifier = 1;
 bool CallApp::residual = false;
@@ -1193,29 +1196,151 @@ void CallApp::initialize()
     dijFuzzy.setRoot(myAddress);
     dijFuzzy.setHasFindDisjoint(true);
     dijFuzzy.run();
-    std::ofstream myfile;
-    std::string name= "rutas"+std::to_string(myAddress)+".txt";
-    myfile.open (name);
 
+    DijkstraKshortestFuzzy dijKFuzzy(50);
+    dijKFuzzy.setAlpha(0.6);
+    dijKFuzzy.addLink(1, 2, 1, 2, 4);
+    dijKFuzzy.addLink(1, 5, 6, 13, 15);
+    dijKFuzzy.addLink(1, 6, 11, 14, 14);
+    dijKFuzzy.addLink(2, 3, 0, 2, 4);
+    dijKFuzzy.addLink(2, 4, 0, 2, 6);
+    dijKFuzzy.addLink(3, 4, 3, 4, 8);
+    dijKFuzzy.addLink(3, 5, 2, 3, 3);
+    dijKFuzzy.addLink(3, 7, 5, 7, 11);
+    dijKFuzzy.addLink(5, 6, 1, 5, 8);
+    dijKFuzzy.addLink(5, 7, 1, 3, 6);
+    dijKFuzzy.addLink(6, 7, 4, 6, 6);
+    dijKFuzzy.addLink(6, 8, 0, 1, 3);
+    dijKFuzzy.addLink(7, 9, 9, 10, 12);
+    dijKFuzzy.addLink(7, 12, 7, 12, 15);
+    dijKFuzzy.addLink(8, 9, 0, 1, 2);
+    dijKFuzzy.addLink(8, 10, 3, 5, 6);
+    dijKFuzzy.addLink(9, 10, 0, 2, 3);
+    dijKFuzzy.addLink(9, 11, 2, 3, 3);
+    dijKFuzzy.addLink(9, 12, 7, 8, 8);
+    dijKFuzzy.addLink(10, 11, 0, 2, 4);
+    dijKFuzzy.addLink(11, 12, 9, 10, 13);
+
+    dijKFuzzy.setRoot(myAddress);
+    dijKFuzzy.run();
+
+    std::ofstream myfile;
+
+    std::string nameK= "rutasK.txt";
+    if (myAddress == 1)
+        myfile.open (nameK);
+    else
+        myfile.open (nameK, std::ios_base::out | std::ios_base::app);
     for (int i = 1; i <=12; i ++) {
+         if (i == myAddress) continue;
+         int numR = dijKFuzzy.getNumRoutes(i);
+         DijkstraKshortestFuzzy::FuzzyCost cost1;
+         DijkstraKshortestFuzzy::FuzzyCost cost2;
+         std::vector<NodeId> path1;
+         std::vector<NodeId> path2;
+
+         myfile << "Solution from " + std::to_string(myAddress);
+         myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() << "\n";
+         for (int k = 0; k < numR; k++) {
+             std::vector<NodeId> pathNode1;
+             std::vector<NodeId> pathNode2;
+             DijkstraKshortestFuzzy::FuzzyCost costAux1;
+             DijkstraKshortestFuzzy::FuzzyCost costAux2;
+
+             costAux1 = dijKFuzzy.getRouteCost(i, pathNode1, k);
+
+             if (path1.empty()) {
+                 if (costAux1 == DijkstraKshortestFuzzy::maximumCost)
+                     throw cRuntimeError("");
+                 path1 = pathNode1;
+                 cost1 = costAux1;
+             }
+             for (int l = k+1; l < numR; l++) {
+                 std::vector<NodeId> pathNode;
+                 costAux2 = dijKFuzzy.getRouteCost(i, pathNode2, l);
+                 if (pathNode2.empty())
+                     continue;
+                 if (dijKFuzzy.commonLinks(pathNode1, pathNode2) != 0)
+                     continue;
+                 if (path2.empty()) {
+                     path2 = pathNode2;
+                     cost2 = costAux2;
+                     continue;
+                 }
+                 if (costAux1 + costAux2 < cost1 + cost2) {
+                     path1 = pathNode1;
+                     cost1 = costAux1;
+                     path2 = pathNode2;
+                     cost2 = costAux2;
+                 }
+             }
+         }
+         DijkstraKshortestFuzzy::FuzzyCost cost3 = cost1+cost2;
+         myfile << "PairShortestPathSolution from " + std::to_string(myAddress);
+         myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() <<  " weight= (" << cost3.cost1 <<"," << cost3.cost2 << "," << cost3.cost3 << "); \n";
+         myfile << "solution1=Solution " ;
+         myfile << "weight= (" << cost1.cost1 <<"," << cost1.cost2 << "," << cost1.cost3 << "); nodes=[";
+         for (auto elem : path1) {
+             myfile <<" "<< std::to_string(elem);
+             if (elem != path1.back())
+                 myfile <<",";
+         }
+         myfile <<"] \n";
+         myfile << "solution2=Solution " ;
+         myfile << "weight= (" << cost2.cost1 <<"," << cost2.cost2 << "," << cost2.cost3 << "); nodes=[";
+         for (auto elem : path2) {
+             myfile <<" "<< std::to_string(elem);
+             if (elem != path2.back())
+                 myfile <<",";
+         }
+         myfile <<"] \n";
+    }
+    myfile.close();
+
+
+    std::string name= "rutas.txt";
+    if (myAddress == 1)
+        myfile.open (name);
+    else
+        myfile.open (name, std::ios_base::out | std::ios_base::app);
+/*
+    PairShortestPathSolution from 1 to 2 for Alpha 0.6 (totallyDisjoint: true; weight(xMin=0)  19,60; weight: ( 9, 20, 26))
+      solution1=Solution [weight(xMin=0)=   2,40; weight= ( 1,  2,  4); nodes= [1, 2]]
+      solution2=Solution [weight(xMin=0)=  17,20; weight= ( 8, 18, 22); nodes= [1, 5, 3, 2]]
+*/
+    for (int i = 1; i <=12; i ++) {
+
         if (i == myAddress) continue;
         dijFuzzy.runDisjoint(i);
         DijkstraFuzzy::Route r1;
         DijkstraFuzzy::Route r2;
         if (dijFuzzy.checkDisjoint(i, r1, r2)) {
             // print routes
-            myfile << "Origin : " + std::to_string(myAddress);
-            myfile << "destination : " + std::to_string(i) << "\n";
-            myfile << "r1 : " ;
+            DijkstraFuzzy::FuzzyCost cost1;
+            DijkstraFuzzy::FuzzyCost cost2;
+            DijkstraFuzzy::FuzzyCost cost3;
+            dijFuzzy.getCostPath(r1, cost1);
+            dijFuzzy.getCostPath(r2, cost2);
+            cost3 = cost1+cost2;
+
+            myfile << "PairShortestPathSolution from " + std::to_string(myAddress);
+            myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() <<  " weight= (" << cost3.cost1 <<"," << cost3.cost2 << "," << cost3.cost3 << "); \n";
+            myfile << "solution1=Solution " ;
+            myfile << "weight= (" << cost1.cost1 <<"," << cost1.cost2 << "," << cost1.cost3 << "); nodes=[";
             for (auto elem : r1) {
-                myfile << std::to_string(elem)+"-";
+                myfile <<" "<< std::to_string(elem);
+                if (elem != r1.back())
+                    myfile <<",";
             }
-            myfile << "\n";
-            myfile << "r2 : " ;
+            myfile <<"] \n";
+            myfile << "solution2=Solution " ;
+            myfile << "weight= (" << cost2.cost1 <<"," << cost2.cost2 << "," << cost2.cost3 << "); nodes=[";
             for (auto elem : r2) {
-                myfile << std::to_string(elem)+"-";
+                myfile <<" "<< std::to_string(elem);
+                if (elem != r2.back())
+                    myfile <<",";
             }
-            myfile << "\n";
+            myfile <<"] \n";
         }
         else {
             throw cRuntimeError("ERROR");

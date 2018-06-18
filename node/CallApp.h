@@ -11,10 +11,8 @@
 
 #include <vector>
 #include <omnetpp.h>
-#include "DijkstraFuzzy.h"
 #include "FlowDataTypes.h"
 #include "Packet_m.h"
-#include "DijktraKShortest.h"
 #include <time.h>
 #include "IRouting.h"
 

@@ -19,8 +19,8 @@
 #include "DijkstraFuzzy.h"
 #include "Dijkstra.h"
 
-DijkstraFuzzy::FuzzyCost DijkstraFuzzy::minimumCost;
-DijkstraFuzzy::FuzzyCost DijkstraFuzzy::maximumCost;
+DijkstraFuzzy::FuzzyCost DijkstraFuzzy::minimumCost = {0, 0, 0};
+DijkstraFuzzy::FuzzyCost DijkstraFuzzy::maximumCost = {std::numeric_limits<double>::max(),  std::numeric_limits<double>::max(),  std::numeric_limits<double>::max()};
 double DijkstraFuzzy::alpha = 0.55;
 
 DijkstraFuzzy::State::State()
@@ -49,14 +49,14 @@ void DijkstraFuzzy::initMinAndMax()
     minimumCost.cost1 = 0;
     minimumCost.cost2 = 0;
     minimumCost.cost3 = 0;
-    maximumCost.cost1 = 1e30;
-    maximumCost.cost2 = 1e30;
-    maximumCost.cost3 = 1e30;
+    maximumCost.cost1 = std::numeric_limits<double>::max();
+    maximumCost.cost2 = std::numeric_limits<double>::max();
+    maximumCost.cost3 = std::numeric_limits<double>::max();
 }
 
 DijkstraFuzzy::DijkstraFuzzy()
 {
-    initMinAndMax();
+    //initMinAndMax();
 }
 
 DijkstraFuzzy::DijkstraFuzzy(const DijkstraFuzzy& other)

@@ -76,7 +76,7 @@ public:
         SetElem()
         {
             iD = UndefinedAddr;
-            cost = 1e30;
+            cost = std::numeric_limits<double>::max();
             cost2 = 0;
             m = basic;
         }
@@ -94,7 +94,7 @@ public:
     class State
     {
     public:
-        double cost = 1e30;
+        double cost = std::numeric_limits<double>::max();
         double cost2 = 0;
         NodeId idPrev;
         StateLabel label;
@@ -110,7 +110,7 @@ public:
         double cost2;
         Edge()
         {
-            cost = 1e30;
+            cost = std::numeric_limits<double>::max();
             cost2 = 0;
             last_node_ = -1;
         }

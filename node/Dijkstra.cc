@@ -205,7 +205,7 @@ void Dijkstra::runUntil(const NodeId &target, const int &rootNode, const LinkArr
     if (it == linkArray.end())
         throw cRuntimeError("Node not found");
 
-    State state(0,1e300);
+    State state(0, std::numeric_limits<double>::max());
     state.label = perm;
     routeMap[rootNode] = state;
 

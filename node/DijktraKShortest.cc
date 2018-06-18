@@ -87,16 +87,16 @@ void DijkstraKshortest::initMinAndMax()
     minimumCost.push_back(costData);
 
     costData.metric = aditiveMin;
-    costData.value = 10e100;
+    costData.value = std::numeric_limits<double>::max();
     maximumCost.push_back(costData);
     costData.metric = aditiveMin;
-    costData.value = 1e100;
+    costData.value = std::numeric_limits<double>::max();
     maximumCost.push_back(costData);
     costData.metric = concaveMax;
     costData.value = 0;
     maximumCost.push_back(costData);
     costData.metric = aditiveMin;
-    costData.value = 10e100;
+    costData.value = std::numeric_limits<double>::max();
     maximumCost.push_back(costData);
 }
 
@@ -576,7 +576,7 @@ bool DijkstraKshortest::getRoute(const NodeId &nodeId, std::vector<NodeId> &path
         return false;
     std::vector<NodeId> path;
     NodeId currentNode = nodeId;
-    int idx = it->second[k].idPrevIdx;
+    int idx = k;
     while (currentNode != rootNode) {
         path.push_back(currentNode);
         currentNode = it->second[idx].idPrev;
@@ -587,12 +587,43 @@ bool DijkstraKshortest::getRoute(const NodeId &nodeId, std::vector<NodeId> &path
         if (idx >= (int) it->second.size())
             throw cRuntimeError("error in data");
     }
+    path.push_back(rootNode);
     pathNode.clear();
     while (!path.empty()) {
         pathNode.push_back(path.back());
         path.pop_back();
     }
     return true;
+}
+
+DijkstraKshortest::CostVector DijkstraKshortest::getRouteCost(const NodeId &nodeId, std::vector<NodeId> &pathNode, int k)
+{
+    auto it = routeMap.find(nodeId);
+    if (it == routeMap.end())
+        return maximumCost;
+    if (k >= (int) it->second.size())
+        return maximumCost;
+    CostVector cost = it->second[k].cost;
+    std::vector<NodeId> path;
+    NodeId currentNode = nodeId;
+    int idx = k;
+    while (currentNode != rootNode) {
+        path.push_back(currentNode);
+        currentNode = it->second[idx].idPrev;
+        idx = it->second[idx].idPrevIdx;
+        it = routeMap.find(currentNode);
+        if (it == routeMap.end())
+            throw cRuntimeError("error in data");
+        if (idx >= (int) it->second.size())
+            throw cRuntimeError("error in data");
+    }
+    path.push_back(rootNode);
+    pathNode.clear();
+    while (!path.empty()) {
+        pathNode.push_back(path.back());
+        path.pop_back();
+    }
+    return cost;
 }
 
 void DijkstraKshortest::setFromTopo(const cTopology *topo)
@@ -656,6 +687,8 @@ unsigned int DijkstraKshortest::commonLinks(const Route &S, const Route &Sp)
         auto it = std::find(Sp.begin(), Sp.end(), S[i]);
         if (it != Sp.end()) { // common node, check link
             unsigned int pos = std::distance(Sp.begin(), it);
+            if (pos == 0)
+                continue;
             // check previous node
             if (S[i-1] == Sp[pos-1])
                 common++;

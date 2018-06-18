@@ -19,8 +19,9 @@
 #include <omnetpp.h>
 #include "DijktraKShortestFuzzy.h"
 
-DijkstraKshortestFuzzy::FuzzyCost DijkstraKshortestFuzzy::minimumCost;
-DijkstraKshortestFuzzy::FuzzyCost DijkstraKshortestFuzzy::maximumCost;
+
+DijkstraKshortestFuzzy::FuzzyCost DijkstraKshortestFuzzy::minimumCost = {0, 0, 0};
+DijkstraKshortestFuzzy::FuzzyCost DijkstraKshortestFuzzy::maximumCost = {std::numeric_limits<double>::max(),  std::numeric_limits<double>::max(),  std::numeric_limits<double>::max()};
 double DijkstraKshortestFuzzy::alpha = 0.55;
 
 DijkstraKshortestFuzzy::State::State()
@@ -53,16 +54,19 @@ void DijkstraKshortestFuzzy::initMinAndMax()
     minimumCost.cost1 = 0;
     minimumCost.cost2 = 0;
     minimumCost.cost3 = 0;
-    maximumCost.cost1 = 1e30;
-    maximumCost.cost2 = 1e30;
-    maximumCost.cost3 = 1e30;
+    maximumCost.cost1 = std::numeric_limits<double>::max();
+    maximumCost.cost2 = std::numeric_limits<double>::max();
+    maximumCost.cost3 = std::numeric_limits<double>::max();
 }
 
+DijkstraKshortestFuzzy::DijkstraKshortestFuzzy() : K_LIMITE(1)
+{
+    // initMinAndMax();
+}
 
-DijkstraKshortestFuzzy::DijkstraKshortestFuzzy(int limit)
+DijkstraKshortestFuzzy::DijkstraKshortestFuzzy(int limit) : K_LIMITE(limit)
 {
     initMinAndMax();
-    K_LIMITE = limit;
 }
 
 void DijkstraKshortestFuzzy::cleanLinkArray()
@@ -101,6 +105,14 @@ void DijkstraKshortestFuzzy::addEdge(const NodeId & originNode, const NodeId & l
 
     linkArray[originNode].push_back(link);
 }
+
+void DijkstraKshortestFuzzy::addLink(const NodeId & node1, const NodeId & node2, double cost, double cost2,
+        double cost3)
+{
+    addEdge(node1, node2, cost, cost2, cost3);
+    addEdge(node2, node1, cost, cost2, cost3);
+}
+
 
 void DijkstraKshortestFuzzy::deleteEdge(const NodeId & originNode, const NodeId & last_node)
 {
@@ -426,21 +438,35 @@ bool DijkstraKshortestFuzzy::getRoute(const NodeId &nodeId, std::vector<NodeId> 
     auto it = routeMap.find(nodeId);
     if (it == routeMap.end())
         return false;
+    if (nodeId != it->first)
+        throw cRuntimeError("error in map");
     if (k >= (int) it->second.size())
         return false;
     std::vector<NodeId> path;
     NodeId currentNode = nodeId;
-    int idx = it->second[k].idPrevIdx;
+    int idx = k;
+    auto itAux = it;
+    auto itAux2 = it;
+    int prevCurrentNode = -1;
+    int prevIdx = -1;
     while (currentNode != rootNode) {
         path.push_back(currentNode);
-        currentNode = it->second[idx].idPrev;
-        idx = it->second[idx].idPrevIdx;
-        it = routeMap.find(currentNode);
-        if (it == routeMap.end())
+        prevCurrentNode = currentNode;
+        currentNode = itAux->second[idx].idPrev;
+        if (currentNode < 0)
             throw cRuntimeError("error in data");
-        if (idx >= (int) it->second.size())
+        prevIdx = idx;
+        idx = itAux->second[idx].idPrevIdx;
+        if (idx < 0)
+            throw cRuntimeError("error in data");
+        itAux2 = itAux;
+        itAux = routeMap.find(currentNode);
+        if (itAux == routeMap.end())
+            throw cRuntimeError("error in data");
+        if (idx >= (int) itAux->second.size())
             throw cRuntimeError("error in data");
     }
+    path.push_back(rootNode);
     pathNode.clear();
     while (!path.empty()) {
         pathNode.push_back(path.back());
@@ -448,6 +474,51 @@ bool DijkstraKshortestFuzzy::getRoute(const NodeId &nodeId, std::vector<NodeId> 
     }
     return true;
 }
+
+
+DijkstraKshortestFuzzy::FuzzyCost DijkstraKshortestFuzzy::getRouteCost(const NodeId &nodeId, std::vector<NodeId> &pathNode, int k)
+{
+    auto it = routeMap.find(nodeId);
+    if (it == routeMap.end())
+        return maximumCost;
+    if (nodeId != it->first)
+        throw cRuntimeError("error in map");
+    if (k >= (int) it->second.size())
+        return maximumCost;
+    std::vector<NodeId> path;
+    NodeId currentNode = nodeId;
+    int idx = k;
+    auto itAux = it;
+    auto itAux2 = it;
+    int prevCurrentNode = -1;
+    int prevIdx = -1;
+
+    while (currentNode != rootNode) {
+        path.push_back(currentNode);
+        prevCurrentNode = currentNode;
+        currentNode = itAux->second[idx].idPrev;
+        if (currentNode < 0)
+            throw cRuntimeError("error in data");
+        prevIdx = idx;
+        idx = itAux->second[idx].idPrevIdx;
+        if (idx < 0)
+            throw cRuntimeError("error in data");
+        itAux2 = itAux;
+        itAux = routeMap.find(currentNode);
+        if (itAux == routeMap.end())
+            throw cRuntimeError("error in data");
+        if (idx >= (int) itAux->second.size())
+            throw cRuntimeError("error in data");
+    }
+    path.push_back(rootNode);
+    pathNode.clear();
+    while (!path.empty()) {
+        pathNode.push_back(path.back());
+        path.pop_back();
+    }
+    return it->second[k].cost;
+}
+
 
 void DijkstraKshortestFuzzy::setFromTopo(const cTopology *topo)
 {
@@ -513,6 +584,8 @@ unsigned int DijkstraKshortestFuzzy::commonLinks(const Route &S, const Route &Sp
         auto it = std::find(Sp.begin(), Sp.end(), S[i]);
         if (it != Sp.end()) { // common node, check link
             unsigned int pos = std::distance(Sp.begin(), it);
+            if (pos == 0)
+                continue;
             // check previous node
             if (S[i-1] == Sp[pos-1])
                 common++;

@@ -28,21 +28,29 @@
 
 using namespace omnetpp;
 
+#ifndef NodeId
 typedef int NodeId;
+#endif
 
-enum Metricts
-{
-    aditiveMin, concaveMin, aditiveMax, concaveMax
-};
-enum StateLabel
-{
-    perm, tent
-};
-
+#ifndef UndefinedAddr
 #define UndefinedAddr -1
+#endif
+
+
 
 class DijkstraKshortest
 {
+public:
+    enum Metricts
+    {
+        aditiveMin, concaveMin, aditiveMax, concaveMax
+    };
+private:
+    enum StateLabel
+    {
+        perm, tent
+    };
+
 protected:
 
     class Cost
@@ -216,6 +224,7 @@ public:
     virtual void runUntil(const NodeId &);
     virtual int getNumRoutes(const NodeId &nodeId);
     virtual bool getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, int k = 0);
+    virtual CostVector getRouteCost(const NodeId &nodeId, std::vector<NodeId> &pathNode, int k = 0);
     virtual void setRouteMapK();
     virtual void getRouteMapK(const NodeId &nodeId, Kroutes &routes);
     virtual unsigned int commonLinks(const Route &S, const Route &Sp);
@@ -225,13 +234,13 @@ inline bool operator <(const DijkstraKshortest::SetElem& x, const DijkstraKshort
 {
     for (unsigned int i = 0; i < x.cost.size(); i++) {
         switch (x.cost[i].metric) {
-            case aditiveMin:
-            case concaveMin:
+            case DijkstraKshortest::aditiveMin:
+            case DijkstraKshortest::concaveMin:
                 if (x.cost[i].value < y.cost[i].value)
                     return true;
                 break;
-            case aditiveMax:
-            case concaveMax:
+            case DijkstraKshortest::aditiveMax:
+            case DijkstraKshortest::concaveMax:
                 if (x.cost[i].value > y.cost[i].value)
                     return true;
                 break;
@@ -244,13 +253,13 @@ inline bool operator <(const DijkstraKshortest::CostVector& x, const DijkstraKsh
 {
     for (unsigned int i = 0; i < x.size(); i++) {
         switch (x[i].metric) {
-            case aditiveMin:
-            case concaveMin:
+            case DijkstraKshortest::aditiveMin:
+            case DijkstraKshortest::concaveMin:
                 if (x[i].value < y[i].value)
                     return true;
                 break;
-            case aditiveMax:
-            case concaveMax:
+            case DijkstraKshortest::aditiveMax:
+            case DijkstraKshortest::concaveMax:
                 if (x[i].value > y[i].value)
                     return true;
                 break;

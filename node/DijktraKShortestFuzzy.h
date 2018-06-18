@@ -16,8 +16,8 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#ifndef __DIJKSTRA_K_SHORTEST_FUZZY__H__
-#define __DIJKSTRA_K_SHORTEST_FUZZY__H__
+#ifndef ___DIJKSTRA_K_SHORTEST_FUZZY__H___
+#define ___DIJKSTRA_K_SHORTEST_FUZZY__H___
 
 #include <vector>
 #include <map>
@@ -28,24 +28,25 @@
 
 using namespace omnetpp;
 
+#ifndef NodeId
 typedef int NodeId;
+#endif
 
-enum Metricts
-{
-    aditiveMin, concaveMin, aditiveMax, concaveMax
-};
-enum StateLabel
-{
-    perm, tent
-};
-
+#ifndef UndefinedAddr
 #define UndefinedAddr -1
+#endif
 
 class DijkstraKshortestFuzzy
 {
-protected:
-    static double alpha;
 
+protected:
+    enum StateLabel
+     {
+         perm, tent
+     };
+
+    static double alpha;
+public:
     struct FuzzyCost
     {
         double cost1 = 0;
@@ -71,7 +72,6 @@ protected:
             return ((1 - DijkstraKshortestFuzzy::alpha) * cost1 + cost2 + DijkstraKshortestFuzzy::alpha * cost3);
         }
     };
-public:
     static DijkstraKshortestFuzzy::FuzzyCost minimumCost;
     static DijkstraKshortestFuzzy::FuzzyCost maximumCost;
     typedef std::vector<NodeId> Route;
@@ -151,7 +151,12 @@ protected:
     NodeId rootNode;
     int K_LIMITE;
 public:
+    void setAlpha(const double &d) {alpha =d;}
+    double getAlpha() {return alpha;}
+
+    DijkstraKshortestFuzzy();
     DijkstraKshortestFuzzy(int);
+
     virtual ~DijkstraKshortestFuzzy();
     virtual void setFromTopo(const cTopology *);
 
@@ -163,6 +168,8 @@ public:
     virtual void initMinAndMax();
     virtual void cleanLinkArray();
     virtual void addEdge(const NodeId & dest_node, const NodeId & last_node, double cost1, double cost2, double cost3);
+    virtual void addLink(const NodeId & node1, const NodeId & node2, double, double, double);
+
     virtual void deleteEdge(const NodeId &, const NodeId &);
     virtual Edge * removeEdge(const NodeId &, const NodeId &);
     virtual void setRoot(const NodeId & dest_node);
@@ -170,6 +177,7 @@ public:
     virtual void runUntil(const NodeId &);
     virtual int getNumRoutes(const NodeId &nodeId);
     virtual bool getRoute(const NodeId &nodeId, std::vector<NodeId> &pathNode, int k = 0);
+    virtual FuzzyCost getRouteCost(const NodeId &nodeId, std::vector<NodeId> &pathNode, int k);
     virtual void setRouteMapK();
     virtual void getRouteMapK(const NodeId &nodeId, Kroutes &routes);
     virtual unsigned int commonLinks(const Route &S, const Route &Sp);
@@ -228,6 +236,7 @@ inline bool operator >(const DijkstraKshortestFuzzy::FuzzyCost& x, const Dijkstr
     }
     return false;
 }
+
 
 
 #endif

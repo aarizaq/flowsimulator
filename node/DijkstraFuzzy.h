@@ -16,8 +16,8 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#ifndef __DIJKSTRA_K_SHORTEST_FUZZY__H__
-#define __DIJKSTRA_K_SHORTEST_FUZZY__H__
+#ifndef __DIJKSTRA_FUZZY__H__
+#define __DIJKSTRA_FUZZY__H__
 
 #include <vector>
 #include <map>

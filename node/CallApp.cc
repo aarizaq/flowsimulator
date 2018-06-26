@@ -27,6 +27,329 @@ simsignal_t CallApp::rcvdPk = registerSignal("rcvdPk");
 
 Define_Module(CallApp);
 
+void CallApp::checkDijktra()
+{
+#if 1
+    DijkstraFuzzy dijFuzzy;
+    std::ofstream myfile;
+    DijkstraKshortestFuzzy dijKFuzzy(50);
+
+    dijFuzzy.setRoot(myAddress);
+    dijFuzzy.setHasFindDisjoint(true);
+    dijFuzzy.setAlpha(0.6);
+
+    dijKFuzzy.setRoot(myAddress);
+    dijKFuzzy.setAlpha(0.6);
+
+    struct PairPaths {
+        std::vector<NodeId> path1;
+        std::vector<NodeId> path2;
+    };
+
+    std::map<NodeId, PairPaths> kRoutes;
+    std::map<NodeId, PairPaths> pRoutes;
+
+#if 1
+    dijFuzzy.addLink(1, 2, 1, 2, 4);
+    dijFuzzy.addLink(1, 5, 6, 13, 15);
+    dijFuzzy.addLink(1, 6, 11, 14, 14);
+    dijFuzzy.addLink(2, 3, 0, 2, 4);
+    dijFuzzy.addLink(2, 4, 0, 2, 6);
+    dijFuzzy.addLink(3, 4, 3, 4, 8);
+    dijFuzzy.addLink(3, 5, 2, 3, 3);
+    dijFuzzy.addLink(3, 7, 5, 7, 11);
+    dijFuzzy.addLink(5, 6, 1, 5, 8);
+    dijFuzzy.addLink(5, 7, 1, 3, 6);
+    dijFuzzy.addLink(6, 7, 4, 6, 6);
+    dijFuzzy.addLink(6, 8, 0, 1, 3);
+    dijFuzzy.addLink(7, 9, 9, 10, 12);
+    dijFuzzy.addLink(7, 12, 7, 12, 15);
+    dijFuzzy.addLink(8, 9, 0, 1, 2);
+    dijFuzzy.addLink(8, 10, 3, 5, 6);
+    dijFuzzy.addLink(9, 10, 0, 2, 3);
+    dijFuzzy.addLink(9, 11, 2, 3, 3);
+    dijFuzzy.addLink(9, 12, 7, 8, 8);
+    dijFuzzy.addLink(10, 11, 0, 2, 4);
+    dijFuzzy.addLink(11, 12, 9, 10, 13);
+
+    dijFuzzy.run();
+
+    dijKFuzzy.addLink(1, 2, 1, 2, 4);
+    dijKFuzzy.addLink(1, 5, 6, 13, 15);
+    dijKFuzzy.addLink(1, 6, 11, 14, 14);
+    dijKFuzzy.addLink(2, 3, 0, 2, 4);
+    dijKFuzzy.addLink(2, 4, 0, 2, 6);
+    dijKFuzzy.addLink(3, 4, 3, 4, 8);
+    dijKFuzzy.addLink(3, 5, 2, 3, 3);
+    dijKFuzzy.addLink(3, 7, 5, 7, 11);
+    dijKFuzzy.addLink(5, 6, 1, 5, 8);
+    dijKFuzzy.addLink(5, 7, 1, 3, 6);
+    dijKFuzzy.addLink(6, 7, 4, 6, 6);
+    dijKFuzzy.addLink(6, 8, 0, 1, 3);
+    dijKFuzzy.addLink(7, 9, 9, 10, 12);
+    dijKFuzzy.addLink(7, 12, 7, 12, 15);
+    dijKFuzzy.addLink(8, 9, 0, 1, 2);
+    dijKFuzzy.addLink(8, 10, 3, 5, 6);
+    dijKFuzzy.addLink(9, 10, 0, 2, 3);
+    dijKFuzzy.addLink(9, 11, 2, 3, 3);
+    dijKFuzzy.addLink(9, 12, 7, 8, 8);
+    dijKFuzzy.addLink(10, 11, 0, 2, 4);
+    dijKFuzzy.addLink(11, 12, 9, 10, 13);
+
+    dijKFuzzy.run();
+
+    std::string nameK= "rutasK.txt";
+    if (myAddress == 1)
+        myfile.open (nameK);
+    else
+        myfile.open (nameK, std::ios_base::out | std::ios_base::app);
+    for (int i = 1; i <=12; i ++) {
+         if (i == myAddress) continue;
+         int numR = dijKFuzzy.getNumRoutes(i);
+         DijkstraKshortestFuzzy::FuzzyCost cost1;
+         DijkstraKshortestFuzzy::FuzzyCost cost2;
+         std::vector<NodeId> path1;
+         std::vector<NodeId> path2;
+
+         myfile << "Solution from " + std::to_string(myAddress);
+         myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() << "\n";
+         for (int k = 0; k < numR; k++) {
+             std::vector<NodeId> pathNode1;
+             std::vector<NodeId> pathNode2;
+             DijkstraKshortestFuzzy::FuzzyCost costAux1;
+             DijkstraKshortestFuzzy::FuzzyCost costAux2;
+
+             costAux1 = dijKFuzzy.getRouteCost(i, pathNode1, k);
+
+             if (path1.empty()) {
+                 if (costAux1 == DijkstraKshortestFuzzy::maximumCost)
+                     throw cRuntimeError("");
+                 path1 = pathNode1;
+                 cost1 = costAux1;
+             }
+             for (int l = k+1; l < numR; l++) {
+                 std::vector<NodeId> pathNode;
+                 costAux2 = dijKFuzzy.getRouteCost(i, pathNode2, l);
+                 if (pathNode2.empty())
+                     continue;
+                 if (dijKFuzzy.commonLinks(pathNode1, pathNode2) != 0)
+                     continue;
+                 if (path2.empty()) {
+                     path2 = pathNode2;
+                     cost2 = costAux2;
+                     continue;
+                 }
+                 if (costAux1 + costAux2 < cost1 + cost2) {
+                     path1 = pathNode1;
+                     cost1 = costAux1;
+                     path2 = pathNode2;
+                     cost2 = costAux2;
+                 }
+             }
+         }
+         DijkstraKshortestFuzzy::FuzzyCost cost3 = cost1+cost2;
+         myfile << "PairShortestPathSolution from " + std::to_string(myAddress);
+         myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() <<  " weight= (" << cost3.cost1 <<"," << cost3.cost2 << "," << cost3.cost3 << "); \n";
+         myfile << "solution1=Solution " ;
+         myfile << "weight= (" << cost1.cost1 <<"," << cost1.cost2 << "," << cost1.cost3 << "); nodes=[";
+         for (auto elem : path1) {
+             myfile <<" "<< std::to_string(elem);
+             if (elem != path1.back())
+                 myfile <<",";
+         }
+         myfile <<"] \n";
+         myfile << "solution2=Solution " ;
+         myfile << "weight= (" << cost2.cost1 <<"," << cost2.cost2 << "," << cost2.cost3 << "); nodes=[";
+         for (auto elem : path2) {
+             myfile <<" "<< std::to_string(elem);
+             if (elem != path2.back())
+                 myfile <<",";
+         }
+         myfile <<"] \n";
+         PairPaths pair;
+         pair.path1 = path1;
+         pair.path2 = path2;
+         kRoutes[i] = pair;
+    }
+    myfile.close();
+
+
+    std::string name= "rutas.txt";
+    if (myAddress == 1)
+        myfile.open (name);
+    else
+        myfile.open (name, std::ios_base::out | std::ios_base::app);
+/*
+    PairShortestPathSolution from 1 to 2 for Alpha 0.6 (totallyDisjoint: true; weight(xMin=0)  19,60; weight: ( 9, 20, 26))
+      solution1=Solution [weight(xMin=0)=   2,40; weight= ( 1,  2,  4); nodes= [1, 2]]
+      solution2=Solution [weight(xMin=0)=  17,20; weight= ( 8, 18, 22); nodes= [1, 5, 3, 2]]
+*/
+    for (int i = 1; i <=12; i ++) {
+
+        if (i == myAddress) continue;
+        dijFuzzy.runDisjoint(i);
+        DijkstraFuzzy::Route r1;
+        DijkstraFuzzy::Route r2;
+        if (dijFuzzy.checkDisjoint(i, r1, r2)) {
+            // print routes
+            DijkstraFuzzy::FuzzyCost cost1;
+            DijkstraFuzzy::FuzzyCost cost2;
+            DijkstraFuzzy::FuzzyCost cost3;
+            dijFuzzy.getCostPath(r1, cost1);
+            dijFuzzy.getCostPath(r2, cost2);
+            cost3 = cost1+cost2;
+
+            myfile << "PairShortestPathSolution from " + std::to_string(myAddress);
+            myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() <<  " weight= (" << cost3.cost1 <<"," << cost3.cost2 << "," << cost3.cost3 << "); \n";
+            myfile << "solution1=Solution " ;
+            myfile << "weight= (" << cost1.cost1 <<"," << cost1.cost2 << "," << cost1.cost3 << "); nodes=[";
+            for (auto elem : r1) {
+                myfile <<" "<< std::to_string(elem);
+                if (elem != r1.back())
+                    myfile <<",";
+            }
+            myfile <<"] \n";
+            myfile << "solution2=Solution " ;
+            myfile << "weight= (" << cost2.cost1 <<"," << cost2.cost2 << "," << cost2.cost3 << "); nodes=[";
+            for (auto elem : r2) {
+                myfile <<" "<< std::to_string(elem);
+                if (elem != r2.back())
+                    myfile <<",";
+            }
+            myfile <<"] \n";
+        }
+        else {
+            throw cRuntimeError("ERROR");
+        }
+        PairPaths pair;
+        pair.path1 = r1;
+        pair.path2 = r2;
+        pRoutes[i] = pair;
+    }
+    myfile.close();
+#endif
+    std::vector<std::string> nedTypes;
+    nedTypes.push_back(getParentModule()->getNedTypeName());
+
+    cTopology topo("topo");
+    topo.extractByNedTypeName(nedTypes);
+
+
+    dijKFuzzy.setFromTopo(&topo);
+    dijFuzzy.setFromTopo(&topo);
+
+    dijKFuzzy.setRoot(myAddress);
+    dijKFuzzy.run();
+
+    dijFuzzy.setRoot(myAddress);
+    dijFuzzy.setHasFindDisjoint(true);
+    dijFuzzy.run();
+
+    pRoutes.clear();
+    kRoutes.clear();
+
+    for (int i = 0; i < topo.getNumNodes(); i ++) {
+        NodeId add = topo.getNode(i)->getModule()->par("address");
+        if (add == myAddress) continue;
+        dijFuzzy.runDisjoint(add);
+        DijkstraFuzzy::Route r1;
+        DijkstraFuzzy::Route r2;
+        if (dijFuzzy.checkDisjoint(add, r1, r2)) {
+            // print routes
+            DijkstraFuzzy::FuzzyCost cost1;
+            DijkstraFuzzy::FuzzyCost cost2;
+            DijkstraFuzzy::FuzzyCost cost3;
+            dijFuzzy.getCostPath(r1, cost1);
+            dijFuzzy.getCostPath(r2, cost2);
+            cost3 = cost1+cost2;
+        }
+        else {
+            throw cRuntimeError("ERROR");
+        }
+        PairPaths pair;
+        pair.path1 = r1;
+        pair.path2 = r2;
+        pRoutes[add] = pair;
+
+        int numR = dijKFuzzy.getNumRoutes(add);
+        DijkstraKshortestFuzzy::FuzzyCost cost1;
+        DijkstraKshortestFuzzy::FuzzyCost cost2;
+        std::vector<NodeId> path1;
+        std::vector<NodeId> path2;
+        for (int k = 0; k < numR; k++) {
+            std::vector<NodeId> pathNode1;
+            std::vector<NodeId> pathNode2;
+            DijkstraKshortestFuzzy::FuzzyCost costAux1;
+            DijkstraKshortestFuzzy::FuzzyCost costAux2;
+            costAux1 = dijKFuzzy.getRouteCost(add, pathNode1, k);
+
+            if (path1.empty()) {
+                if (costAux1 == DijkstraKshortestFuzzy::maximumCost)
+                    throw cRuntimeError("");
+                path1 = pathNode1;
+                cost1 = costAux1;
+            }
+            for (int l = k+1; l < numR; l++) {
+                std::vector<NodeId> pathNode;
+                costAux2 = dijKFuzzy.getRouteCost(add, pathNode2, l);
+                if (pathNode2.empty())
+                    continue;
+                if (dijKFuzzy.commonLinks(pathNode1, pathNode2) != 0)
+                    continue;
+                if (path2.empty()) {
+                    path2 = pathNode2;
+                    cost2 = costAux2;
+                    continue;
+                }
+                if (costAux1 + costAux2 < cost1 + cost2) {
+                    path1 = pathNode1;
+                    cost1 = costAux1;
+                    path2 = pathNode2;
+                    cost2 = costAux2;
+                }
+            }
+        }
+        DijkstraKshortestFuzzy::FuzzyCost cost3 = cost1+cost2;
+        pair.path1 = path1;
+        pair.path2 = path2;
+        kRoutes[add] = pair;
+    }
+
+    std::string nameD= "diff.txt";
+    if (myAddress == 1)
+        myfile.open (nameD);
+    else
+        myfile.open (nameD, std::ios_base::out | std::ios_base::app);
+    // check diferences
+    for (auto elem : pRoutes) {
+        auto it = kRoutes.find(elem.first);
+        if (it == kRoutes.end()) {
+            throw cRuntimeError("ERROR");
+        }
+        if (!(elem.second.path1 == it->second.path1 && elem.second.path1 == it->second.path1)){
+            // diferences
+            // throw cRuntimeError("Diferences ");
+            // print routes
+            DijkstraFuzzy::FuzzyCost cost1;
+            DijkstraFuzzy::FuzzyCost cost2;
+            DijkstraFuzzy::FuzzyCost cost3;
+            cost3 = cost1+cost2;
+            for (auto elem2 : elem.second.path1) {
+                myfile <<" "<< std::to_string(elem2);
+                if (elem2 != elem.second.path1.back())
+                    myfile <<",";
+            }
+            for (auto elem2: elem.second.path2) {
+                myfile <<" "<< std::to_string(elem2);
+                if (elem2 != elem.second.path2.back())
+                    myfile <<",";
+            }
+        }
+    }
+    myfile.close();
+#endif
+}
+
 CallApp::CallApp()
 {
     callIdentifier = 1;
@@ -169,7 +492,7 @@ void CallApp::newCallFlow(CallInfo *callInfo, const uint64_t  &bw)
 }
 
 
-double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow)
+double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2)
 {
     char pkname[100];
     callInfo->state = ON;
@@ -177,19 +500,40 @@ double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow)
     pkFlow->setFlowId(callInfo->flowId);
     callInfo->usedBandwith = (uint64_t) usedBandwith->doubleValue();
     callInfo->paketSize = packetSize->intValue();
-    pkFlow->setReserve(callInfo->usedBandwith);
     pkFlow->setType(STARTFLOW);
     callInfo->startOn = simTime();
 
     sprintf(pkname, "FlowOn-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow->getDestAddr(),
             pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
     pkFlow->setName(pkname);
+
+    if (pkFlow2 != nullptr) {
+        pkFlow2->setType(STARTFLOW);
+        pkFlow2->setFlowId(callInfo->callIdBk);
+        sprintf(pkname, "FlowOn-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow2->getDestAddr(),
+                pkFlow2->getCallId(), pkFlow2->getFlowId(), this->getIndex());
+        pkFlow2->setName(pkname);
+
+        uint64_t  half = (callInfo->usedBandwith) >> 1;
+        uint64_t  half2 = callInfo->usedBandwith - half;
+        if (half > half2) {
+            pkFlow->setReserve(half);
+            pkFlow2->setReserve(half2);
+        }
+        else {
+            pkFlow->setReserve(half2);
+            pkFlow2->setReserve(half);
+        }
+    }
+    else
+        pkFlow->setReserve(callInfo->usedBandwith);
+
     return TimeOn->doubleValue();
 
 }
 
 
-double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow)
+double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2)
 {
 
     // delete pending packets
@@ -210,16 +554,40 @@ double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow)
     callInfo->state = OFF;
     pkFlow->setType(ENDFLOW);
     pkFlow->setFlowId(callInfo->flowId);
-    pkFlow->setReserve(callInfo->usedBandwith);
 
     sprintf(pkname, "FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d",
                                     myAddress, pkFlow->getDestAddr(),
                                     pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
+
     pkFlow->setName(pkname);
+    if (pkFlow2 != nullptr) {
+        pkFlow2->setType(ENDFLOW);
+        pkFlow2->setFlowId(callInfo->callIdBk);
+        sprintf(pkname, "FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d",
+                                        myAddress, pkFlow2->getDestAddr(),
+                                        pkFlow2->getCallId(),pkFlow2->getFlowId(), this->getIndex());
+        pkFlow2->setName(pkname);
+
+        uint64_t  half = (callInfo->usedBandwith) >> 1;
+        uint64_t  half2 = callInfo->usedBandwith - half;
+        if (half > half2) {
+            pkFlow->setReserve(half);
+            pkFlow2->setReserve(half2);
+        }
+        else {
+            pkFlow->setReserve(half2);
+            pkFlow2->setReserve(half);
+        }
+    }
+    else
+        pkFlow->setReserve(callInfo->usedBandwith);
+
+
+
     return TimeOff->doubleValue();
 }
 
-double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & elem)
+double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2, FlowData & elem)
 {
     char pkname[100];
     elem.state = ON;
@@ -235,11 +603,34 @@ double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & ele
             myAddress, pkFlow->getDestAddr(),
             pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
     pkFlow->setName(pkname);
+
+    if (pkFlow2 != nullptr) {
+        pkFlow2->setType(STARTFLOW);
+        pkFlow2->setFlowId(callInfo->callIdBk);
+        sprintf(pkname, "FlowOn-%d-to-%d-CallId#%" PRIu64 " - FlowId#%" PRIu64 " -Sid-%d",
+                myAddress, pkFlow2->getDestAddr(),
+                pkFlow2->getCallId(), pkFlow2->getFlowId(), this->getIndex());
+        pkFlow2->setName(pkname);
+
+        uint64_t  half = (elem.usedBandwith) >> 1;
+        uint64_t  half2 = elem.usedBandwith - half;
+        if (half > half2) {
+            pkFlow->setReserve(half);
+            pkFlow2->setReserve(half2);
+        }
+        else {
+            pkFlow->setReserve(half2);
+            pkFlow2->setReserve(half);
+        }
+    }
+    else
+        pkFlow->setReserve(elem.usedBandwith);
+
     return TimeOn->doubleValue();
 
 }
 
-double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & elem)
+double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2, FlowData & elem)
 {
     char pkname[100];
 
@@ -253,6 +644,28 @@ double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & elem)
             myAddress, pkFlow->getDestAddr(),
             pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
     pkFlow->setName(pkname);
+    if (pkFlow2 != nullptr) {
+        pkFlow2->setType(ENDFLOW);
+        pkFlow2->setFlowId(callInfo->callIdBk);
+        sprintf(pkname, "pkFlow-%d-to-%d-CallId#%" PRIu64 " - FlowId#%" PRIu64 " -Sid-%d",
+                myAddress, pkFlow2->getDestAddr(),
+                pkFlow2->getCallId(), pkFlow2->getFlowId(), this->getIndex());
+        pkFlow2->setName(pkname);
+
+        uint64_t  half = (elem.usedBandwith) >> 1;
+        uint64_t  half2 = elem.usedBandwith - half;
+        if (half > half2) {
+            pkFlow->setReserve(half);
+            pkFlow2->setReserve(half2);
+        }
+        else {
+            pkFlow->setReserve(half2);
+            pkFlow2->setReserve(half);
+        }
+    }
+    else
+        pkFlow->setReserve(elem.usedBandwith);
+
     return TimeOff->doubleValue();
 }
 
@@ -339,6 +752,8 @@ void CallApp::newCallPacket(CallInfo *callInfo)
     if (callInfo->interArrivalTime == SimTime::ZERO)
         return;
 
+    // TODO: Divide the flow if the source is disjoint
+
     Packet *pkFlow = new Packet();
     pkFlow->setSourceId(par("sourceId").intValue());
     pkFlow->setDestinationId(callInfo->sourceId);
@@ -394,6 +809,7 @@ void CallApp::procNextEvent()
         CallEvents.erase(it);
 
         Packet *pkFlow = new Packet();
+        Packet *pkFlow2 = nullptr;
 
         pkFlow->setDestAddr(callInfo->dest);
         pkFlow->setCallId(callInfo->callId);
@@ -401,22 +817,43 @@ void CallApp::procNextEvent()
         pkFlow->setDestinationId(callInfo->sourceId);
         pkFlow->setSrcAddr(myAddress);
 
+
+        if (routingModule->getRoutingType() == IRouting::DISJOINT && callInfo->callIdBk > 0)
+        {
+            pkFlow2 = new Packet();
+            pkFlow2->setDestAddr(callInfo->dest);
+            pkFlow2->setCallId(callInfo->callIdBk);
+            pkFlow2->setSourceId(par("sourceId").intValue());
+            pkFlow2->setDestinationId(callInfo->sourceId);
+            pkFlow2->setSrcAddr(myAddress);
+
+        }
+
+
         if (callInfo->flowData.empty()) {
             if (callInfo->state == ON) {
                 callInfo->interArrivalTime = SimTime::ZERO;
-                delayAux = endCallFlow(callInfo, pkFlow);
+                delayAux = endCallFlow(callInfo, pkFlow, pkFlow2);
             }
             else if (callInfo->state == OFF) {
                 double timePackets = (double) callInfo->paketSize/ (double) callInfo->usedBandwith;
                 callInfo->interArrivalTime = SimTime(timePackets);
-                delayAux = startCallFlow(callInfo, pkFlow);
+                delayAux = startCallFlow(callInfo, pkFlow, pkFlow2);
             }
             if (pkFlow->getDestAddr() == myAddress)
                 throw cRuntimeError("Destination address erroneous");
-            if (simulationMode == FLOWMODE)
+            if (simulationMode == FLOWMODE) {
                 send(pkFlow, "out");
-            else
+                if (pkFlow2)
+                    send(pkFlow2, "out");
+            }
+            else {
                 delete pkFlow;
+                if (pkFlow2) {
+                    delete pkFlow2;
+                    pkFlow2 = nullptr;
+                }
+            }
             CallEvents.insert(std::make_pair(simTime() + delayAux, callInfo));
             // If simulation is Packet mode and state is in on, generate next
             if (simulationMode == PACKETMODE && callInfo->state == ON) {
@@ -430,10 +867,10 @@ void CallApp::procNextEvent()
                 if (elem.nextEvent > simTime())
                     continue;
                 if (elem.state == ON) {
-                    delayAux = endCallFlow(callInfo, pkFlow, elem);
+                    delayAux = endCallFlow(callInfo, pkFlow, pkFlow2, elem);
                 }
                 else if (elem.state == OFF) {
-                    delayAux = startCallFlow(callInfo, pkFlow, elem);
+                    delayAux = startCallFlow(callInfo, pkFlow, pkFlow2, elem);
                     if (simulationMode == PACKETMODE) {
                         // TODO: Compute interarrival time of the packet
                         callInfo->interArrivalTime = (double) callInfo->paketSize/ (double) callInfo->usedBandwith;
@@ -508,8 +945,8 @@ void CallApp::newCall() {
 
     DijkstraFuzzy::Route r1, r2, min;
 
-    if (routingModule->getRoutingType() == IRouting::BACKUPROUTE || routingModule->getRoutingType() == IRouting::BACKUPROUTEKSH) {
-        routingModule->getRoute(destAddress,r1,r2);
+    if (routingModule->getRoutingType() == IRouting::BACKUPROUTE || routingModule->getRoutingType() == IRouting::BACKUPROUTEKSH || routingModule->getRoutingType() == IRouting::DISJOINT ) {
+        routingModule->getPairRoutes(destAddress,r1,r2);
         // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
         // new call id for backup route
         Packet *pk2 = pk->dup();
@@ -530,7 +967,7 @@ void CallApp::newCall() {
         send(pk2, "out");
     }
     else {
-        routingModule->getRoute(destAddress,r1,r2);
+        routingModule->getPairRoutes(destAddress,r1,r2);
         pk->setRouteArraySize(r1.size());
         for (unsigned int i = 0; i < r1.size(); i++) {
             pk->setRoute(i, r1[i]);
@@ -1168,186 +1605,9 @@ void CallApp::initialize()
     send(msg, "out");
 
     initTime = time(nullptr);
-#if 1
-    DijkstraFuzzy dijFuzzy;
-    dijFuzzy.setAlpha(0.6);
-    dijFuzzy.addLink(1, 2, 1, 2, 4);
-    dijFuzzy.addLink(1, 5, 6, 13, 15);
-    dijFuzzy.addLink(1, 6, 11, 14, 14);
-    dijFuzzy.addLink(2, 3, 0, 2, 4);
-    dijFuzzy.addLink(2, 4, 0, 2, 6);
-    dijFuzzy.addLink(3, 4, 3, 4, 8);
-    dijFuzzy.addLink(3, 5, 2, 3, 3);
-    dijFuzzy.addLink(3, 7, 5, 7, 11);
-    dijFuzzy.addLink(5, 6, 1, 5, 8);
-    dijFuzzy.addLink(5, 7, 1, 3, 6);
-    dijFuzzy.addLink(6, 7, 4, 6, 6);
-    dijFuzzy.addLink(6, 8, 0, 1, 3);
-    dijFuzzy.addLink(7, 9, 9, 10, 12);
-    dijFuzzy.addLink(7, 12, 7, 12, 15);
-    dijFuzzy.addLink(8, 9, 0, 1, 2);
-    dijFuzzy.addLink(8, 10, 3, 5, 6);
-    dijFuzzy.addLink(9, 10, 0, 2, 3);
-    dijFuzzy.addLink(9, 11, 2, 3, 3);
-    dijFuzzy.addLink(9, 12, 7, 8, 8);
-    dijFuzzy.addLink(10, 11, 0, 2, 4);
-    dijFuzzy.addLink(11, 12, 9, 10, 13);
 
-    dijFuzzy.setRoot(myAddress);
-    dijFuzzy.setHasFindDisjoint(true);
-    dijFuzzy.run();
+    checkDijktra();
 
-    DijkstraKshortestFuzzy dijKFuzzy(50);
-    dijKFuzzy.setAlpha(0.6);
-    dijKFuzzy.addLink(1, 2, 1, 2, 4);
-    dijKFuzzy.addLink(1, 5, 6, 13, 15);
-    dijKFuzzy.addLink(1, 6, 11, 14, 14);
-    dijKFuzzy.addLink(2, 3, 0, 2, 4);
-    dijKFuzzy.addLink(2, 4, 0, 2, 6);
-    dijKFuzzy.addLink(3, 4, 3, 4, 8);
-    dijKFuzzy.addLink(3, 5, 2, 3, 3);
-    dijKFuzzy.addLink(3, 7, 5, 7, 11);
-    dijKFuzzy.addLink(5, 6, 1, 5, 8);
-    dijKFuzzy.addLink(5, 7, 1, 3, 6);
-    dijKFuzzy.addLink(6, 7, 4, 6, 6);
-    dijKFuzzy.addLink(6, 8, 0, 1, 3);
-    dijKFuzzy.addLink(7, 9, 9, 10, 12);
-    dijKFuzzy.addLink(7, 12, 7, 12, 15);
-    dijKFuzzy.addLink(8, 9, 0, 1, 2);
-    dijKFuzzy.addLink(8, 10, 3, 5, 6);
-    dijKFuzzy.addLink(9, 10, 0, 2, 3);
-    dijKFuzzy.addLink(9, 11, 2, 3, 3);
-    dijKFuzzy.addLink(9, 12, 7, 8, 8);
-    dijKFuzzy.addLink(10, 11, 0, 2, 4);
-    dijKFuzzy.addLink(11, 12, 9, 10, 13);
-
-    dijKFuzzy.setRoot(myAddress);
-    dijKFuzzy.run();
-
-    std::ofstream myfile;
-
-    std::string nameK= "rutasK.txt";
-    if (myAddress == 1)
-        myfile.open (nameK);
-    else
-        myfile.open (nameK, std::ios_base::out | std::ios_base::app);
-    for (int i = 1; i <=12; i ++) {
-         if (i == myAddress) continue;
-         int numR = dijKFuzzy.getNumRoutes(i);
-         DijkstraKshortestFuzzy::FuzzyCost cost1;
-         DijkstraKshortestFuzzy::FuzzyCost cost2;
-         std::vector<NodeId> path1;
-         std::vector<NodeId> path2;
-
-         myfile << "Solution from " + std::to_string(myAddress);
-         myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() << "\n";
-         for (int k = 0; k < numR; k++) {
-             std::vector<NodeId> pathNode1;
-             std::vector<NodeId> pathNode2;
-             DijkstraKshortestFuzzy::FuzzyCost costAux1;
-             DijkstraKshortestFuzzy::FuzzyCost costAux2;
-
-             costAux1 = dijKFuzzy.getRouteCost(i, pathNode1, k);
-
-             if (path1.empty()) {
-                 if (costAux1 == DijkstraKshortestFuzzy::maximumCost)
-                     throw cRuntimeError("");
-                 path1 = pathNode1;
-                 cost1 = costAux1;
-             }
-             for (int l = k+1; l < numR; l++) {
-                 std::vector<NodeId> pathNode;
-                 costAux2 = dijKFuzzy.getRouteCost(i, pathNode2, l);
-                 if (pathNode2.empty())
-                     continue;
-                 if (dijKFuzzy.commonLinks(pathNode1, pathNode2) != 0)
-                     continue;
-                 if (path2.empty()) {
-                     path2 = pathNode2;
-                     cost2 = costAux2;
-                     continue;
-                 }
-                 if (costAux1 + costAux2 < cost1 + cost2) {
-                     path1 = pathNode1;
-                     cost1 = costAux1;
-                     path2 = pathNode2;
-                     cost2 = costAux2;
-                 }
-             }
-         }
-         DijkstraKshortestFuzzy::FuzzyCost cost3 = cost1+cost2;
-         myfile << "PairShortestPathSolution from " + std::to_string(myAddress);
-         myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() <<  " weight= (" << cost3.cost1 <<"," << cost3.cost2 << "," << cost3.cost3 << "); \n";
-         myfile << "solution1=Solution " ;
-         myfile << "weight= (" << cost1.cost1 <<"," << cost1.cost2 << "," << cost1.cost3 << "); nodes=[";
-         for (auto elem : path1) {
-             myfile <<" "<< std::to_string(elem);
-             if (elem != path1.back())
-                 myfile <<",";
-         }
-         myfile <<"] \n";
-         myfile << "solution2=Solution " ;
-         myfile << "weight= (" << cost2.cost1 <<"," << cost2.cost2 << "," << cost2.cost3 << "); nodes=[";
-         for (auto elem : path2) {
-             myfile <<" "<< std::to_string(elem);
-             if (elem != path2.back())
-                 myfile <<",";
-         }
-         myfile <<"] \n";
-    }
-    myfile.close();
-
-
-    std::string name= "rutas.txt";
-    if (myAddress == 1)
-        myfile.open (name);
-    else
-        myfile.open (name, std::ios_base::out | std::ios_base::app);
-/*
-    PairShortestPathSolution from 1 to 2 for Alpha 0.6 (totallyDisjoint: true; weight(xMin=0)  19,60; weight: ( 9, 20, 26))
-      solution1=Solution [weight(xMin=0)=   2,40; weight= ( 1,  2,  4); nodes= [1, 2]]
-      solution2=Solution [weight(xMin=0)=  17,20; weight= ( 8, 18, 22); nodes= [1, 5, 3, 2]]
-*/
-    for (int i = 1; i <=12; i ++) {
-
-        if (i == myAddress) continue;
-        dijFuzzy.runDisjoint(i);
-        DijkstraFuzzy::Route r1;
-        DijkstraFuzzy::Route r2;
-        if (dijFuzzy.checkDisjoint(i, r1, r2)) {
-            // print routes
-            DijkstraFuzzy::FuzzyCost cost1;
-            DijkstraFuzzy::FuzzyCost cost2;
-            DijkstraFuzzy::FuzzyCost cost3;
-            dijFuzzy.getCostPath(r1, cost1);
-            dijFuzzy.getCostPath(r2, cost2);
-            cost3 = cost1+cost2;
-
-            myfile << "PairShortestPathSolution from " + std::to_string(myAddress);
-            myfile << " to " + std::to_string(i) << " for Alpha "<< dijFuzzy.getAlpha() <<  " weight= (" << cost3.cost1 <<"," << cost3.cost2 << "," << cost3.cost3 << "); \n";
-            myfile << "solution1=Solution " ;
-            myfile << "weight= (" << cost1.cost1 <<"," << cost1.cost2 << "," << cost1.cost3 << "); nodes=[";
-            for (auto elem : r1) {
-                myfile <<" "<< std::to_string(elem);
-                if (elem != r1.back())
-                    myfile <<",";
-            }
-            myfile <<"] \n";
-            myfile << "solution2=Solution " ;
-            myfile << "weight= (" << cost2.cost1 <<"," << cost2.cost2 << "," << cost2.cost3 << "); nodes=[";
-            for (auto elem : r2) {
-                myfile <<" "<< std::to_string(elem);
-                if (elem != r2.back())
-                    myfile <<",";
-            }
-            myfile <<"] \n";
-        }
-        else {
-            throw cRuntimeError("ERROR");
-        }
-    }
-    myfile.close();
-#endif
 }
 
 void CallApp::handleMessage(cMessage *msg)

@@ -103,6 +103,7 @@ private:
         int sourceId = 0;
         uint64_t callId = -1;
         uint64_t callIdBk = 0;
+        uint64_t callActive = -1; // only if disjoint
         uint64_t flowId = 0;
         State state = WAITCONFIRMATION;
         State stateRec = OFF;
@@ -163,10 +164,10 @@ private:
     static simsignal_t rcvdPk;
 
     virtual void   newCallFlow(CallInfo *callInfo, const uint64_t  &bw);
-    virtual double startCallFlow(CallInfo *callInfo, Packet *pkFlow);
-    virtual double endCallFlow(CallInfo *callInfo, Packet *pkFlow);
-    virtual double startCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & elem);
-    virtual double endCallFlow(CallInfo *callInfo, Packet *pkFlow, FlowData & elem);
+    virtual double startCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2);
+    virtual double endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2);
+    virtual double startCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2, FlowData & elem);
+    virtual double endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2, FlowData & elem);
     virtual void newCallPacket(CallInfo *callInfo);
 
     virtual void  endFlow(FlowEvent *flowEvent);
@@ -176,6 +177,7 @@ public:
     virtual ~CallApp();
 
 protected:
+    virtual void checkDijktra();
     virtual void rescheduleEvent();
     virtual void procNextEvent();
     virtual void newCall();

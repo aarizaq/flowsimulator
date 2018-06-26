@@ -25,6 +25,7 @@ public:
         DISJOINT,
         BACKUPROUTE,
         BACKUPROUTEKSH,
+        BACKUPROUTEKSHFUZZY,
         SW,
         WS,
         SWFUZZY,
@@ -32,7 +33,7 @@ public:
      };
     virtual void setRoutingType(const RoutingType &) = 0;
     virtual RoutingType getRoutingType() = 0;
-    virtual void getRoute(int, std::vector<int> &, std::vector<int> &) = 0;
+    virtual void getPairRoutes(const int &, std::vector<int> &, std::vector<int> &, const bool & = false) = 0;
 };
 
 #endif /* NODE_IROUTING_H_ */

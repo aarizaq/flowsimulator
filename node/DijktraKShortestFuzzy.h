@@ -85,6 +85,7 @@ protected:
     public:
         NodeId iD;
         int idx;
+        int hops = 0;
         DijkstraKshortestFuzzy::FuzzyCost cost;
         SetElem()
         {
@@ -96,6 +97,7 @@ protected:
             this->iD = val.iD;
             this->idx = val.idx;
             this->cost = val.cost;
+            this->hops = val.hops;
             return *this;
         }
     };
@@ -116,6 +118,7 @@ protected:
         NodeId idPrev;
         int idPrevIdx;
         StateLabel label;
+        int hops = 0;
         State();
         State(const FuzzyCost &cost);
         ~State();
@@ -185,8 +188,6 @@ public:
 
 inline bool operator <(const DijkstraKshortestFuzzy::SetElem& x, const DijkstraKshortestFuzzy::SetElem& y)
 {
-    if (x.iD == y.iD)
-        return false;
     if (x.cost == y.cost)
         return x.iD < y.iD;
     return x.cost < y.cost;
@@ -194,15 +195,15 @@ inline bool operator <(const DijkstraKshortestFuzzy::SetElem& x, const DijkstraK
 
 inline bool operator ==(const DijkstraKshortestFuzzy::SetElem& x, const DijkstraKshortestFuzzy::SetElem& y)
 {
-    if (x.iD == y.iD)
+    if (x.cost == y.cost && x.iD == y.iD)
         return true;
-    return x.cost == y.cost;
+    return false;
 }
 
 inline bool operator >(const DijkstraKshortestFuzzy::SetElem& x, const DijkstraKshortestFuzzy::SetElem& y)
 {
-    if (x.iD == y.iD)
-        return (false);
+    if (x.cost == y.cost)
+        return x.iD > y.iD;
     return (x.cost > y.cost);
 }
 

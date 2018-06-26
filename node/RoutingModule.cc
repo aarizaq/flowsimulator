@@ -48,9 +48,9 @@ IRouting::RoutingType RoutingModule::getRoutingType()
     return rType;
 }
 
-void RoutingModule::getRoute(int destAddress, std::vector<int> &path, std::vector<int> &path2) {
+void RoutingModule::getPairRoutes(const int & destAddress, std::vector<int> &path, std::vector<int> &path2, const bool & forceDisj) {
 
-    if (rType == DISJOINT) {
+    if (forceDisj || rType == DISJOINT) {
         DijkstraFuzzy::Route r1, r2, min;
         dijFuzzy->setRoot(myAddress);
         dijFuzzy->runDisjoint(destAddress);
@@ -209,10 +209,22 @@ void RoutingModule::readTopo()
 
     }
 
+    if (rType == BACKUPROUTEKSHFUZZY) {
+        if (dijkstraksFuzzy == nullptr)
+            dijkstraksFuzzy = new DijkstraKshortestFuzzy(10); // maximum patsh
+        else
+            dijkstraksFuzzy->cleanLinkArray();
+
+    }
+
+
+
     dijFuzzy->setRoot(getParentModule()->par("address"));
     dijkstra->setRoot(getParentModule()->par("address"));
     if (dijkstraks)
         dijkstraks->setRoot(getParentModule()->par("address"));
+    if (dijkstraksFuzzy)
+        dijkstraksFuzzy->setRoot(getParentModule()->par("address"));
 
     std::vector<std::string> nedTypes;
     nedTypes.push_back(getParentModule()->getNedTypeName());
@@ -275,14 +287,14 @@ void RoutingModule::readTopo()
                     meanResidual = 1;
                     maxResidual = 1;
                 }
-
-
             }
             dijFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
             dijkstra->addEdge(address, addressAux, minResidual,1);
             dj.addEdge(address, addressAux, 1, 10000);
             if (dijkstraks)
                 dijkstraks->addEdgeWs(address, addressAux,1,minResidual);
+            if (dijkstraksFuzzy)
+                dijkstraksFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
         }
     }
     NodePairs links;
@@ -300,6 +312,10 @@ void RoutingModule::procActualize(Actualize *pkt)
         if (linkData.nominal == 0) {
             dijFuzzy->deleteEdge(nodeId, linkData.node);
             dijkstra->deleteEdge(nodeId, linkData.node);
+            if (dijkstraks)
+                dijkstraks->deleteEdge(nodeId, linkData.node);
+            if (dijkstraksFuzzy)
+                 dijkstraksFuzzy->deleteEdge(nodeId, linkData.node);
         }
         else {
             double minResidual = linkData.nominal - linkData.max;
@@ -360,13 +376,16 @@ void RoutingModule::procActualize(Actualize *pkt)
             if (minResidual == 0)
                 throw cRuntimeError("Problems detected");
             dijFuzzy->addEdge(nodeId, linkData.node, minResidual, meanResidual, maxResidual);
+            if (dijkstraksFuzzy)
+                dijkstraksFuzzy->addEdge(nodeId, linkData.node, minResidual, meanResidual, maxResidual);
             if (par("instValue").boolValue()) {
                 if (rType == SW || rType == WS)
                     dijkstra->addEdge(nodeId, linkData.node, 1, linkData.nominal - linkData.actual);
                 else
                     dijkstra->addEdge(nodeId, linkData.node, instResidual, 1);
                 if (dijkstraks)
-                    dijkstraks->addEdgeWs(nodeId, linkData.node,1,instResidual);
+                    dijkstraks->addEdgeWs(nodeId, linkData.node, 1, instResidual);
+
             }
             else {
                 double minResidual = linkData.nominal - linkData.max;
@@ -380,7 +399,7 @@ void RoutingModule::procActualize(Actualize *pkt)
                 else
                     dijkstra->addEdge(nodeId, linkData.node, meanResidual, 1);
                 if (dijkstraks)
-                    dijkstraks->addEdgeWs(nodeId, linkData.node,1,meanResidual);
+                    dijkstraks->addEdgeWs(nodeId, linkData.node, 1 ,meanResidual);
             }
         }
     }

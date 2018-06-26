@@ -527,7 +527,7 @@ void DijkstraKshortestFuzzy::setFromTopo(const cTopology *topo)
         NodeId id = node->getModule()->par("address");
         for (int j = 0; j < node->getNumOutLinks(); j++) {
             NodeId idNex = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
-            cChannel * channel = node->getModule()->gate("port$o", i)->getTransmissionChannel();
+            cChannel * channel = node->getModule()->gate("port$o", j)->getTransmissionChannel();
             double cost = 1 / channel->getNominalDatarate();
 
             uint64_t val = channel->getNominalDatarate();

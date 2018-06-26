@@ -79,6 +79,7 @@ public:
     {
     public:
         int iD;
+        int hops = 0;
         DijkstraFuzzy::FuzzyCost cost;
         SetElem()
         {
@@ -87,6 +88,7 @@ public:
         SetElem& operator=(const SetElem& val)
         {
             this->iD = val.iD;
+            this->hops = val.hops;
             this->cost = val.cost;
             return *this;
         }
@@ -97,6 +99,7 @@ public:
     public:
         FuzzyCost cost;
         NodeId idPrev;
+        int hops = 0;
         State();
         State(const FuzzyCost &cost);
         ~State();
@@ -142,6 +145,7 @@ protected:
     friend bool operator <(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y);
     friend bool operator ==(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y);
     friend bool operator >(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y);
+    friend bool operator !=(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y);
 
     typedef std::map<NodeId, Kroutes> MapRoutes;
     MapRoutes kRoutesMap;
@@ -205,25 +209,34 @@ public:
 
 inline bool operator <(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y)
 {
-    if (x.iD == y.iD)
-        return false;
-    if (x.cost == y.cost)
-        return x.iD < y.iD;
-    return x.cost < y.cost;
+    if (x.cost != y.cost)
+        return x.cost < y.cost;
+    if (x.hops != y.hops)
+        return x.hops < y.hops;
+    return x.iD < y.iD;
 }
 
 inline bool operator ==(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y)
 {
-    if (x.iD == y.iD)
+    if (x.cost == y.cost && x.iD == y.iD && x.hops == y.hops )
         return true;
-    return x.cost == y.cost;
+    return false;
+}
+
+inline bool operator !=(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y)
+{
+    if (x == y)
+        return false;
+    return true;
 }
 
 inline bool operator >(const DijkstraFuzzy::SetElem& x, const DijkstraFuzzy::SetElem& y)
 {
-    if (x.iD == y.iD)
-        return (false);
-    return (x.cost > y.cost);
+    if (x.cost != y.cost)
+        return x.cost > y.cost;
+    if (x.hops != y.hops)
+        return x.hops > y.hops;
+    return x.iD > y.iD;
 }
 
 inline bool operator <(const DijkstraFuzzy::FuzzyCost& x, const DijkstraFuzzy::FuzzyCost& y)

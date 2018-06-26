@@ -20,6 +20,7 @@
 
 #include "Dijkstra.h"
 #include "DijkstraFuzzy.h"
+#include "DijktraKShortestFuzzy.h"
 #include "Packet_m.h"
 #include "DijktraKShortest.h"
 #include "IForwarding.h"
@@ -31,7 +32,7 @@ class RoutingModule: public cSimpleModule, public IRouting, protected cListener 
 public:
     RoutingModule();
     virtual ~RoutingModule();
-    virtual void getRoute(int, std::vector<int> &, std::vector<int> &) override;
+    virtual void getPairRoutes(const int &, std::vector<int> &, std::vector<int> &, const bool & =false) override;
     virtual void setRoutingType(const IRouting::RoutingType & a) override;
     virtual IRouting::RoutingType getRoutingType() override;
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
@@ -56,6 +57,8 @@ protected:
     DijkstraFuzzy *dijFuzzy = nullptr;
     Dijkstra *dijkstra = nullptr;
     DijkstraKshortest *dijkstraks = nullptr;
+    DijkstraKshortestFuzzy *dijkstraksFuzzy = nullptr;
+
     bool residual = false;
 
     std::vector<double> percentajesValues;

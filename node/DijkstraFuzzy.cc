@@ -214,7 +214,8 @@ void DijkstraFuzzy::run()
 
 void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
 {
-    std::deque<SetElem> heap;
+//    std::deque<SetElem> heap;
+    std::multiset<SetElem> heap2;
     routeMap.clear();
 
     auto it = linkArray.find(rootNode);
@@ -235,22 +236,33 @@ void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
         State state;
         state.idPrev = rootNode;
         state.cost = current_edge->cost;
+        state.hops = 1;
         routeMap[current_edge->last_node()] = state;
         SetElem newElem;
         newElem.iD = current_edge->last_node();
         newElem.cost = current_edge->cost;
-        heap.push_back(newElem);
+        newElem.hops = 1;
+//        heap.push_back(newElem);
+        heap2.insert(newElem);
     }
 
-    while (!heap.empty()) {
+    while (!heap2.empty()) {
         // search min element
-        auto minIt = heap.begin();
-        for (auto itAux = heap.begin(); itAux != heap.end(); ++itAux) {
-            if (itAux->cost < minIt->cost || (itAux->cost == minIt->cost && itAux->iD < minIt->iD))
-                minIt = itAux;
-        }
-        SetElem elem = *minIt;
-        heap.erase(minIt);
+//        auto minIt = heap.begin();
+//        for (auto itAux = heap.begin(); itAux != heap.end(); ++itAux) {
+//            if ((itAux->cost < minIt->cost) ||
+//                    (itAux->cost == minIt->cost && itAux->hops < minIt->hops) ||
+//                    (itAux->cost == minIt->cost && itAux->hops == minIt->hops && itAux->iD < minIt->iD))
+//                minIt = itAux;
+//        }
+//        SetElem elemAux = *minIt;
+//        heap.erase(minIt);
+        SetElem elem = *heap2.begin();
+        heap2.erase(heap2.begin());
+
+//        if (elemAux != elem)
+//            throw cRuntimeError("Error in heap");
+
         auto it = routeMap.find(elem.iD);
         if (it == routeMap.end())
             throw cRuntimeError("node not found in routeMap");
@@ -278,6 +290,7 @@ void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
         for (unsigned int i = 0; i < linkIt->second.size(); i++) {
             Edge* current_edge = (linkIt->second)[i];
             FuzzyCost cost;
+            int hops;
 
             // check if the node is in the path
             if (std::find(pathActive.begin(), pathActive.end(), current_edge->last_node()) != pathActive.end())
@@ -286,33 +299,41 @@ void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
             auto itNext = routeMap.find(current_edge->last_node());
 
             cost = current_edge->cost + it->second.cost;
+            hops = 1 + it->second.hops;
+
 
             if (itNext == routeMap.end()) {
                 State state;
                 state.idPrev = elem.iD;
                 state.cost = cost;
+                state.hops = hops;
                 routeMap[current_edge->last_node()] = state;
                 SetElem newElem;
                 newElem.iD = current_edge->last_node();
                 newElem.cost = cost;
-                heap.push_back(newElem);
+                newElem.hops = hops;
+//                heap.push_back(newElem);
+                heap2.insert(newElem);
             }
             else {
-                if (cost < itNext->second.cost) {
+                bool actualize = false;
+                if (cost < itNext->second.cost)
+                    actualize = true;
+                else if  (cost == itNext->second.cost && itNext->second.hops > hops)
+                    actualize = true;
+                else if (cost == itNext->second.cost && itNext->second.hops == hops && itNext->second.idPrev > elem.iD)
+                    actualize = true;
+
+                if (actualize) {
                     itNext->second.cost = cost;
                     itNext->second.idPrev = elem.iD;
+                    itNext->second.hops = hops;
                     SetElem newElem;
                     newElem.iD = current_edge->last_node();
                     newElem.cost = cost;
-                    heap.push_back(newElem);
-                }
-                else if (cost == itNext->second.cost && itNext->second.idPrev > elem.iD) {
-                    itNext->second.cost = cost;
-                    itNext->second.idPrev = elem.iD;
-                    SetElem newElem;
-                    newElem.iD = current_edge->last_node();
-                    newElem.cost = cost;
-                    heap.push_back(newElem);
+                    newElem.hops = hops;
+//                    heap.push_back(newElem);
+                    heap2.insert(newElem);
                 }
             }
         }
@@ -321,7 +342,8 @@ void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
 
 void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, RouteMap & routeMap)
 {
-    std::deque<SetElem> heap;
+//    std::deque<SetElem> heap;
+    std::multiset<SetElem> heap2;
     routeMap.clear();
 
     auto it = linkArray.find(rootNode);
@@ -335,21 +357,31 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
         State state;
         state.idPrev = rootNode;
         state.cost = current_edge->cost;
+        state.hops = 1;
         routeMap[current_edge->last_node()] = state;
         SetElem newElem;
         newElem.iD = current_edge->last_node();
         newElem.cost = current_edge->cost;
-        heap.push_back(newElem);
+        newElem.hops = 1;
+//        heap.push_back(newElem);
+        heap2.insert(newElem);
     }
 
-    while (!heap.empty()) {
-        auto minIt = heap.begin();
-        for (auto itAux = heap.begin(); itAux != heap.end(); ++itAux) {
-            if (itAux->cost < minIt->cost || (itAux->cost == minIt->cost && itAux->iD < minIt->iD))
-                minIt = itAux;
-        }
-        SetElem elem = *minIt;
-        heap.erase(minIt);
+    while (!heap2.empty()) {
+//        auto minIt = heap.begin();
+//        for (auto itAux = heap.begin(); itAux != heap.end(); ++itAux) {
+//            if ((itAux->cost < minIt->cost) ||
+//                    (itAux->cost == minIt->cost && itAux->hops < minIt->hops) ||
+//                    (itAux->cost == minIt->cost && itAux->hops == minIt->hops && itAux->iD < minIt->iD))
+//                minIt = itAux;
+//        }
+//        SetElem elemAux = *minIt;
+//        heap.erase(minIt);
+        SetElem elem = *heap2.begin();
+//        if (elem != elemAux)
+//            throw cRuntimeError("Error in heap");
+        heap2.erase(heap2.begin());
+
         auto it = routeMap.find(elem.iD);
         if (it == routeMap.end())
             throw cRuntimeError("node not found in routeMap");
@@ -363,7 +395,7 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
         while (currentNode != rootNode) {
             // check if the node is in the path
             if (std::find(pathActive.begin(),pathActive.end(),currentNode) != pathActive.end())
-                throw cRuntimeError("error in data");;
+                throw cRuntimeError("error in data");
             pathActive.push_back(currentNode);
 
             currentNode = itAux->second.idPrev;
@@ -383,6 +415,10 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
         for (unsigned int i = 0; i < linkIt->second.size(); i++) {
             Edge* current_edge = (linkIt->second)[i];
             FuzzyCost cost;
+            int hops = 0;
+
+            if (current_edge->last_node() == rootNode)
+                continue; // never explore root node
 
             // check if the node is in the path
             if (std::find(pathActive.begin(),pathActive.end(),current_edge->last_node()) != pathActive.end())
@@ -391,33 +427,40 @@ void DijkstraFuzzy::runUntil(const NodeId &target, const LinkArray &linkArray, R
             RouteMap::iterator itNext = routeMap.find(current_edge->last_node());
 
             cost = current_edge->cost + it->second.cost;
+            hops = 1 + it->second.hops;
 
             if (itNext == routeMap.end()) {
                 State state;
                 state.idPrev = elem.iD;
                 state.cost = cost;
+                state.hops = hops;
                 routeMap[current_edge->last_node()] = state;
                 SetElem newElem;
                 newElem.iD = current_edge->last_node();
                 newElem.cost = cost;
-                heap.push_back(newElem);
+                newElem.hops = hops;
+//                heap.push_back(newElem);
+                heap2.insert(newElem);
             }
             else {
-                if (cost < itNext->second.cost) {
+                bool actualize = false;
+                if (cost < itNext->second.cost)
+                    actualize = true;
+                else if  (cost == itNext->second.cost && itNext->second.hops > hops)
+                    actualize = true;
+                else if (cost == itNext->second.cost && itNext->second.hops == hops && itNext->second.idPrev > elem.iD)
+                    actualize = true;
+
+                if (actualize) {
                     itNext->second.cost = cost;
+                    itNext->second.hops = hops;
                     itNext->second.idPrev = elem.iD;
                     SetElem newElem;
                     newElem.iD = current_edge->last_node();
                     newElem.cost = cost;
-                    heap.push_back(newElem);
-                }
-                else if (cost == itNext->second.cost && itNext->second.idPrev > elem.iD) {
-                    itNext->second.cost = cost;
-                    itNext->second.idPrev = elem.iD;
-                    SetElem newElem;
-                    newElem.iD = current_edge->last_node();
-                    newElem.cost = cost;
-                    heap.push_back(newElem);
+                    newElem.hops = hops;
+//                    heap.push_back(newElem);
+                    heap2.insert(newElem);
                 }
             }
         }
@@ -687,11 +730,11 @@ void DijkstraFuzzy::setFromTopo(const cTopology *topo)
 {
     for (int i = 0; i < topo->getNumNodes(); i++) {
         cTopology::Node *node = const_cast<cTopology*>(topo)->getNode(i);
-        NodeId id = node->getModuleId();
+        NodeId id = node->getModule()->par("address");
         for (int j = 0; j < node->getNumOutLinks(); j++) {
 
             NodeId idNex = node->getLinkOut(j)->getRemoteNode()->getModule()->par("address");
-            cChannel * channel = node->getModule()->gate("port$o", i)->getTransmissionChannel();
+            cChannel * channel = node->getModule()->gate("port$o", j)->getTransmissionChannel();
             double cost = 1 / channel->getNominalDatarate();
 
             uint64_t val = channel->getNominalDatarate();

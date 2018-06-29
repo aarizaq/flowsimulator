@@ -29,7 +29,7 @@ Define_Module(CallApp);
 
 void CallApp::checkDijktra()
 {
-#if 1
+#if 0
     DijkstraFuzzy dijFuzzy;
     std::ofstream myfile;
     DijkstraKshortestFuzzy dijKFuzzy(50);
@@ -44,12 +44,13 @@ void CallApp::checkDijktra()
     struct PairPaths {
         std::vector<NodeId> path1;
         std::vector<NodeId> path2;
+        DijkstraFuzzy::FuzzyCost cost1;
     };
 
     std::map<NodeId, PairPaths> kRoutes;
     std::map<NodeId, PairPaths> pRoutes;
 
-#if 1
+#if 0
     dijFuzzy.addLink(1, 2, 1, 2, 4);
     dijFuzzy.addLink(1, 5, 6, 13, 15);
     dijFuzzy.addLink(1, 6, 11, 14, 14);
@@ -169,6 +170,7 @@ void CallApp::checkDijktra()
          PairPaths pair;
          pair.path1 = path1;
          pair.path2 = path2;
+         pair.cost1 = DijkstraFuzzy::FuzzyCost(cost3.cost1, cost3.cost2, cost3.cost3);
          kRoutes[i] = pair;
     }
     myfile.close();
@@ -190,11 +192,12 @@ void CallApp::checkDijktra()
         dijFuzzy.runDisjoint(i);
         DijkstraFuzzy::Route r1;
         DijkstraFuzzy::Route r2;
+        DijkstraFuzzy::FuzzyCost cost3;
         if (dijFuzzy.checkDisjoint(i, r1, r2)) {
             // print routes
             DijkstraFuzzy::FuzzyCost cost1;
             DijkstraFuzzy::FuzzyCost cost2;
-            DijkstraFuzzy::FuzzyCost cost3;
+
             dijFuzzy.getCostPath(r1, cost1);
             dijFuzzy.getCostPath(r2, cost2);
             cost3 = cost1+cost2;
@@ -224,9 +227,15 @@ void CallApp::checkDijktra()
         PairPaths pair;
         pair.path1 = r1;
         pair.path2 = r2;
+        pair.cost1 = cost3;
         pRoutes[i] = pair;
     }
     myfile.close();
+
+    for (int i = 0; i < pRoutes.size(); i++) {
+        if (pRoutes[i].cost1 != kRoutes[i].cost1)
+            throw cRuntimeError("");
+    }
 #endif
     std::vector<std::string> nedTypes;
     nedTypes.push_back(getParentModule()->getNedTypeName());
@@ -254,14 +263,15 @@ void CallApp::checkDijktra()
         dijFuzzy.runDisjoint(add);
         DijkstraFuzzy::Route r1;
         DijkstraFuzzy::Route r2;
+        DijkstraFuzzy::FuzzyCost cost3A;
         if (dijFuzzy.checkDisjoint(add, r1, r2)) {
             // print routes
             DijkstraFuzzy::FuzzyCost cost1;
             DijkstraFuzzy::FuzzyCost cost2;
-            DijkstraFuzzy::FuzzyCost cost3;
+
             dijFuzzy.getCostPath(r1, cost1);
             dijFuzzy.getCostPath(r2, cost2);
-            cost3 = cost1+cost2;
+            cost3A = cost1+cost2;
         }
         else {
             throw cRuntimeError("ERROR");
@@ -269,11 +279,14 @@ void CallApp::checkDijktra()
         PairPaths pair;
         pair.path1 = r1;
         pair.path2 = r2;
+        pair.cost1 = cost3A;
         pRoutes[add] = pair;
 
         int numR = dijKFuzzy.getNumRoutes(add);
-        DijkstraKshortestFuzzy::FuzzyCost cost1;
-        DijkstraKshortestFuzzy::FuzzyCost cost2;
+        DijkstraKshortestFuzzy::FuzzyCost cost1(1e100, 1e100, 1e100);
+        DijkstraKshortestFuzzy::FuzzyCost cost2(1e100, 1e100, 1e100);
+        DijkstraKshortestFuzzy::FuzzyCost cost3;
+        std::vector<NodeId> pathInitial;
         std::vector<NodeId> path1;
         std::vector<NodeId> path2;
         for (int k = 0; k < numR; k++) {
@@ -282,13 +295,9 @@ void CallApp::checkDijktra()
             DijkstraKshortestFuzzy::FuzzyCost costAux1;
             DijkstraKshortestFuzzy::FuzzyCost costAux2;
             costAux1 = dijKFuzzy.getRouteCost(add, pathNode1, k);
+            if (pathInitial.empty())
+                pathInitial = pathNode1;
 
-            if (path1.empty()) {
-                if (costAux1 == DijkstraKshortestFuzzy::maximumCost)
-                    throw cRuntimeError("");
-                path1 = pathNode1;
-                cost1 = costAux1;
-            }
             for (int l = k+1; l < numR; l++) {
                 std::vector<NodeId> pathNode;
                 costAux2 = dijKFuzzy.getRouteCost(add, pathNode2, l);
@@ -296,11 +305,6 @@ void CallApp::checkDijktra()
                     continue;
                 if (dijKFuzzy.commonLinks(pathNode1, pathNode2) != 0)
                     continue;
-                if (path2.empty()) {
-                    path2 = pathNode2;
-                    cost2 = costAux2;
-                    continue;
-                }
                 if (costAux1 + costAux2 < cost1 + cost2) {
                     path1 = pathNode1;
                     cost1 = costAux1;
@@ -309,41 +313,100 @@ void CallApp::checkDijktra()
                 }
             }
         }
-        DijkstraKshortestFuzzy::FuzzyCost cost3 = cost1+cost2;
+        cost3 = cost1+cost2;
         pair.path1 = path1;
         pair.path2 = path2;
+        if (pair.path1.empty())
+            pair.path1 = pathInitial;
+        pair.cost1 = DijkstraFuzzy::FuzzyCost(cost3.cost1, cost3.cost2, cost3.cost3);
         kRoutes[add] = pair;
+        if (dijKFuzzy.commonLinks(pair.path1, pair.path2) != 0) {
+            throw cRuntimeError("");
+        }
+
     }
 
     std::string nameD= "diff.txt";
-    if (myAddress == 1)
+    if (myAddress == 0)
         myfile.open (nameD);
     else
         myfile.open (nameD, std::ios_base::out | std::ios_base::app);
     // check diferences
+//    for (auto elem : pRoutes) {
+//        auto it = kRoutes.find(elem.first);
+//        if (it == kRoutes.end()) {
+//            throw cRuntimeError("ERROR");
+//        }
+//        if (!(elem.second.path1 == it->second.path1 && elem.second.path1 == it->second.path1)){
+//            // diferences
+//            // throw cRuntimeError("Diferences ");
+//            // print routes
+//            DijkstraFuzzy::FuzzyCost cost1;
+//            DijkstraFuzzy::FuzzyCost cost2;
+//            DijkstraFuzzy::FuzzyCost cost3;
+//            cost3 = cost1+cost2;
+//            for (auto elem2 : elem.second.path1) {
+//                myfile <<" "<< std::to_string(elem2);
+//                if (elem2 != elem.second.path1.back())
+//                    myfile <<",";
+//            }
+//            for (auto elem2: elem.second.path2) {
+//                myfile <<" "<< std::to_string(elem2);
+//                if (elem2 != elem.second.path2.back())
+//                    myfile <<",";
+//            }
+//        }
+//    }
+//
+
     for (auto elem : pRoutes) {
+        if (elem.first == myAddress)
+            continue; // no routes to root node
         auto it = kRoutes.find(elem.first);
-        if (it == kRoutes.end()) {
-            throw cRuntimeError("ERROR");
-        }
-        if (!(elem.second.path1 == it->second.path1 && elem.second.path1 == it->second.path1)){
-            // diferences
-            // throw cRuntimeError("Diferences ");
-            // print routes
-            DijkstraFuzzy::FuzzyCost cost1;
-            DijkstraFuzzy::FuzzyCost cost2;
-            DijkstraFuzzy::FuzzyCost cost3;
-            cost3 = cost1+cost2;
-            for (auto elem2 : elem.second.path1) {
+        PairPaths pair1, pair2;
+        pair1 = elem.second;
+        pair2 = it->second;
+
+        if (pair1.path2.empty())
+            throw cRuntimeError("");
+        if (pair2.path2.empty())
+            continue;
+
+        if (pair1.cost1 != pair2.cost1) {
+            myfile <<" Destination "<< std::to_string(elem.first);
+            myfile <<"\n";
+            myfile << "weight= (" << pair1.cost1.cost1 <<"," << pair1.cost1.cost2 << "," << pair1.cost1.cost3 << " \n";
+            myfile << "Path 1 = (" ;
+            for (auto elem2 : pair1.path1) {
                 myfile <<" "<< std::to_string(elem2);
                 if (elem2 != elem.second.path1.back())
                     myfile <<",";
             }
-            for (auto elem2: elem.second.path2) {
+            myfile <<") \n";
+            myfile << "Path 2 = (" ;
+            for (auto elem2 : pair1.path2) {
                 myfile <<" "<< std::to_string(elem2);
-                if (elem2 != elem.second.path2.back())
+                if (elem2 != elem.second.path1.back())
                     myfile <<",";
             }
+            myfile <<") \n";
+
+            myfile << "weight2= (" << pair2.cost1.cost1 <<"," << pair2.cost1.cost2 << "," << pair2.cost1.cost3 << " \n";
+            myfile << "Path 1 = (" ;
+            for (auto elem2 : pair2.path1) {
+                myfile <<" "<< std::to_string(elem2);
+                if (elem2 != elem.second.path1.back())
+                    myfile <<",";
+            }
+            myfile <<") \n";
+            myfile << "Path 2 = (" ;
+            for (auto elem2 : pair2.path2) {
+                myfile <<" "<< std::to_string(elem2);
+                if (elem2 != elem.second.path1.back())
+                    myfile <<",";
+            }
+            myfile <<") \n";
+            // throw cRuntimeError("");
         }
     }
     myfile.close();
@@ -945,8 +1008,11 @@ void CallApp::newCall() {
 
     DijkstraFuzzy::Route r1, r2, min;
 
-    if (routingModule->getRoutingType() == IRouting::BACKUPROUTE || routingModule->getRoutingType() == IRouting::BACKUPROUTEKSH || routingModule->getRoutingType() == IRouting::DISJOINT ) {
-        routingModule->getPairRoutes(destAddress,r1,r2);
+    if (par("disjointRoute").boolValue() || routingModule->getRoutingType() == IRouting::BACKUPROUTE || routingModule->getRoutingType() == IRouting::BACKUPROUTEKSH || routingModule->getRoutingType() == IRouting::DISJOINT ) {
+        if (par("disjointRoute").boolValue())
+            routingModule->getPairRoutes(destAddress,r1,r2, true);
+        else
+            routingModule->getPairRoutes(destAddress,r1,r2);
         // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
         // new call id for backup route
         Packet *pk2 = pk->dup();

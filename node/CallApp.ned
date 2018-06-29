@@ -17,6 +17,7 @@ simple CallApp like IApp
     parameters:
         int address;  // local node address
         string destAddresses = default("");  // destination addresses
+        bool disjointRoute = default(false);
         int sourceId = default(0);
         int destinationId = default(0);
         bool packetMode = default(false); // if true the source generates packets instead flow events

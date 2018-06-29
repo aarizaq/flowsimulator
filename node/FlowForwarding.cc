@@ -572,7 +572,7 @@ bool FlowForwarding::sendChangeFlow(FlowInfo &flow, const int &portForward)
     auto it = inputFlows.find(flow.identify);
     if (it == inputFlows.end())
         return false;
-// envía mensaje de cambio de ruta en el flujo.
+// envÃ­a mensaje de cambio de ruta en el flujo.
     Packet * pkt = new Packet();
     pkt->setSrcAddr(flow.identify.src());
     pkt->setCallId(flow.identify.callId());
@@ -584,7 +584,7 @@ bool FlowForwarding::sendChangeFlow(FlowInfo &flow, const int &portForward)
 
     if (hasGUI()) {
         char pkname[100];
-        sprintf(pkname, "CROUTEFLOWENDL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+        sprintf(pkname, "CROUTEFLOWENDL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                 pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
         pkt->setName(pkname);
     }
@@ -708,7 +708,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
 
                                     if (hasGUI()) {
                                         char pkname[100];
-                                        sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+                                        sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                                                 pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                                         pkt->setName(pkname);
                                     }
@@ -737,7 +737,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
 
                             if (hasGUI()) {
                                 char pkname[100];
-                                sprintf(pkname, "ReleaseL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+                                sprintf(pkname, "ReleaseL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                                         pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                                 pkt->setName(pkname);
                             }
@@ -766,7 +766,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                                 throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
                             if (hasGUI()) {
                                 char pkname[100];
-                                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+                                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                                         pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                                 pkt->setName(pkname);
                             }
@@ -852,7 +852,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                                 pkt->setDestAddr(elem.second.node1);
                             if (hasGUI()) {
                                 char pkname[100];
-                                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+                                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                                         pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                                 pkt->setName(pkname);
                             }
@@ -902,7 +902,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                             throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
                         if (hasGUI()) {
                             char pkname[100];
-                            printf(pkname, "ReleaseL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+                            printf(pkname, "ReleaseL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                                     pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                             pkt->setName(pkname);
                         }
@@ -988,7 +988,7 @@ void FlowForwarding::processLinkEvents(cObject *obj)
                             if (hasGUI()) {
                                 char pkname[100];
                                 sprintf(pkname,
-                                        "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i",
+                                        "EndFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i",
                                         pkt->getSrcAddr(), pkt->getDestAddr(),
                                         pkt->getCallId(), pkt->getFlowId(),
                                         pkt->getDestinationId());
@@ -1111,7 +1111,7 @@ bool FlowForwarding::procReserve(Packet *pk, int &portForward, int &destId)
 
         if (hasGUI()) {
             char pkname[100];
-            sprintf(pkname, "RejectedL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+            sprintf(pkname, "RejectedL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                     pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
             pkt->setName(pkname);
         }
@@ -1242,7 +1242,7 @@ void FlowForwarding::checkPendingList()
                 pkStartFlow->setReserve(it->used);
                 if (hasGUI()) {
                     char pkname[100];
-                    sprintf(pkname, "StartFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkStartFlow->getSrcAddr(),
+                    sprintf(pkname, "StartFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkStartFlow->getSrcAddr(),
                             pkStartFlow->getDestAddr(), pkStartFlow->getCallId(), pkStartFlow->getFlowId(), pkStartFlow->getDestinationId());
                     pkStartFlow->setName(pkname);
                 }
@@ -1362,7 +1362,7 @@ void FlowForwarding::checkPendingList()
 
                 if (hasGUI()) {
                     char pkname[100];
-                    sprintf(pkname, "StartFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkStartFlow->getSrcAddr(),
+                    sprintf(pkname, "StartFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkStartFlow->getSrcAddr(),
                             pkStartFlow->getDestAddr(), pkStartFlow->getCallId(), pkStartFlow->getFlowId(), pkStartFlow->getDestinationId());
                     pkStartFlow->setName(pkname);
                 }
@@ -1783,7 +1783,7 @@ bool FlowForwarding::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOut
                 if (hasGUI()) {
                     char pkname[100];
                     sprintf(pkname,
-                            "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i",
+                            "EndFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i",
                             pkt->getSrcAddr(), pkt->getDestAddr(),
                             pkt->getCallId(), pkt->getFlowId(),
                             pkt->getDestinationId());
@@ -1846,7 +1846,7 @@ bool FlowForwarding::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOut
                         if (hasGUI()) {
                             char pkname[100];
                             sprintf(pkname,
-                                    "FlowChangeL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i",
+                                    "FlowChangeL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i",
                                     pkt->getSrcAddr(), pkt->getDestAddr(),
                                     pkt->getCallId(), pkt->getFlowId(),
                                     pkt->getDestinationId());
@@ -2484,7 +2484,7 @@ void FlowForwarding::processChangeRoutes(ChangeRoutingTable *obj)
                 throw cRuntimeError("Source id %i not registered", pkt->getDestinationId());
             if (hasGUI()) {
                 char pkname[100];
-                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%llud-flow-%llud-dest Id %i", pkt->getSrcAddr(),
+                sprintf(pkname, "EndFlowL3-%d-to-%d-Call id#%lud-flow-%lud-dest Id %i", pkt->getSrcAddr(),
                         pkt->getDestAddr(), pkt->getCallId(), pkt->getFlowId(), pkt->getDestinationId());
                 pkt->setName(pkname);
             }

@@ -749,7 +749,7 @@ void CallApp::release(Packet *pk) {
     }
 
     if (it == activeCalls.end() && it2 == backupCalls.end()) {
-        if (!pk->isSelfMessage()) // si se ha liberador por rotura debería haber llegado a la otra parte el relese con lo cual no debe mandar el mensaje de release otra vez
+        if (!pk->isSelfMessage()) // si se ha liberador por rotura deberÃ­a haber llegado a la otra parte el relese con lo cual no debe mandar el mensaje de release otra vez
             throw cRuntimeError("Call Id not found in any list");
         else {
             if (pk->getCallIdBk() == 0) {
@@ -763,7 +763,7 @@ void CallApp::release(Packet *pk) {
                 return;
             }
             else {
-             // El backup pasó a principal, se debe eliminar ahora el backup
+             // El backup pasï¿½ a principal, se debe eliminar ahora el backup
                 throw cRuntimeError("Call Id not found in any list");
                 pk->setCallId(pk->getCallIdBk());
                 pk->setCallIdBk(0);
@@ -1165,49 +1165,6 @@ void CallApp::initialize()
     send(msg, "out");
 
     initTime = time(nullptr);
-#if 0
-    DijkstraFuzzy dijFuzzy;
-    dijFuzzy.setAlpha(0.6);
-    dijFuzzy.addLink(1, 2, 1, 2, 4);
-    dijFuzzy.addLink(1, 5, 6, 13, 15);
-    dijFuzzy.addLink(1, 6, 11, 14, 14);
-    dijFuzzy.addLink(2, 3, 0, 2, 4);
-    dijFuzzy.addLink(2, 4, 0, 2, 6);
-    dijFuzzy.addLink(3, 4, 3, 4, 8);
-    dijFuzzy.addLink(3, 5, 2, 3, 3);
-    dijFuzzy.addLink(3, 7, 5, 7, 11);
-    dijFuzzy.addLink(5, 6, 1, 5, 8);
-    dijFuzzy.addLink(5, 7, 1, 3, 6);
-    dijFuzzy.addLink(6, 7, 4, 6, 6);
-    dijFuzzy.addLink(6, 8, 0, 1, 3);
-    dijFuzzy.addLink(7, 9, 9, 10, 12);
-    dijFuzzy.addLink(7, 12, 7, 12, 15);
-    dijFuzzy.addLink(8, 9, 0, 1, 2);
-    dijFuzzy.addLink(8, 10, 3, 5, 6);
-    dijFuzzy.addLink(9, 10, 0, 2, 3);
-    dijFuzzy.addLink(9, 11, 2, 3, 3);
-    dijFuzzy.addLink(9, 12, 7, 8, 8);
-    dijFuzzy.addLink(10, 11, 0, 2, 4);
-    dijFuzzy.addLink(11, 12, 9, 10, 13);
-
-    dijFuzzy.setRoot(myAddress);
-    dijFuzzy.setHasFindDisjoint(true);
-    dijFuzzy.run();
-    for (int i = 1; i <=12; i ++) {
-        if (i == myAddress) continue;
-        dijFuzzy.runDisjoint(i);
-
-        DijkstraFuzzy::Route r1;
-        DijkstraFuzzy::Route r2;
-        if (dijFuzzy.checkDisjoint(i, r1, r2)) {
-            // print routes
-
-        }
-        else {
-            throw cRuntimeError("ERROR");
-        }
-    }
-#endif
 }
 
 void CallApp::handleMessage(cMessage *msg)

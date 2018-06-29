@@ -147,6 +147,7 @@ void DijkstraFuzzy::addEdge(const NodeId & originNode, const NodeId & last_node,
     link->cost.cost3 = cost3;
     kRoutesMap.clear();
     routeMap.clear();
+    routeMapAux.clear();
     linkArray[originNode].push_back(link);
 }
 
@@ -160,6 +161,10 @@ void DijkstraFuzzy::addLink(const NodeId & node1, const NodeId & node2, double c
 
 void DijkstraFuzzy::addEdge(const NodeId & originNode, Edge *edge)
 {
+    kRoutesMap.clear();
+    routeMap.clear();
+    routeMapAux.clear();
+
     LinkArray::iterator it;
     it = linkArray.find(originNode);
     if (it != linkArray.end()) {
@@ -167,12 +172,11 @@ void DijkstraFuzzy::addEdge(const NodeId & originNode, Edge *edge)
             if (edge->last_node() == it->second[i]->last_node_) {
                 delete it->second[i];
                 it->second[i] = edge;
-                kRoutesMap.clear();
-                routeMap.clear();
                 return;
             }
         }
     }
+
     linkArray[originNode].push_back(edge);
 }
 
@@ -195,6 +199,7 @@ DijkstraFuzzy::Edge * DijkstraFuzzy::removeEdge(const NodeId & originNode, const
                 it->second.erase(itAux);
                 kRoutesMap.clear();
                 routeMap.clear();
+                routeMapAux.clear();
                 return edge;
             }
         }
@@ -209,8 +214,144 @@ void DijkstraFuzzy::setRoot(const NodeId & dest_node)
 
 void DijkstraFuzzy::run()
 {
-    run(linkArray, routeMap);
+    runClassic(linkArray, routeMap);
 }
+
+void DijkstraFuzzy::runClassic(const LinkArray &linkArray, RouteMap & routeMap)
+{
+//    std::deque<SetElem> heap;
+    std::multiset<SetElem> heap2;
+    routeMap.clear();
+
+    auto it = linkArray.find(rootNode);
+    if (it == linkArray.end())
+        throw cRuntimeError("Node not found");
+
+    State state(minimumCost);
+    routeMap[rootNode] = State(minimumCost);
+    routeMap[rootNode].label = perm;
+
+    // include the neighbors of the root node
+
+    auto linkIt = linkArray.find(rootNode);
+    if (linkIt == linkArray.end())
+        throw cRuntimeError("Error link not found in linkArray");
+
+    for (unsigned int i = 0; i < it->second.size(); i++) {
+        Edge* current_edge = (it->second)[i];
+        State state;
+        state.idPrev = rootNode;
+        state.cost = current_edge->cost;
+        state.hops = 1;
+        state.label = tent;
+        routeMap[current_edge->last_node()] = state;
+        SetElem newElem;
+        newElem.iD = current_edge->last_node();
+        newElem.cost = current_edge->cost;
+        newElem.hops = 1;
+//        heap.push_back(newElem);
+        heap2.insert(newElem);
+    }
+
+    while (!heap2.empty()) {
+        // search min element
+//        auto minIt = heap.begin();
+//        for (auto itAux = heap.begin(); itAux != heap.end(); ++itAux) {
+//            if ((itAux->cost < minIt->cost) ||
+//                    (itAux->cost == minIt->cost && itAux->hops < minIt->hops) ||
+//                    (itAux->cost == minIt->cost && itAux->hops == minIt->hops && itAux->iD < minIt->iD))
+//                minIt = itAux;
+//        }
+//        SetElem elemAux = *minIt;
+//        heap.erase(minIt);
+        SetElem elem = *heap2.begin();
+        heap2.erase(heap2.begin());
+
+//        if (elemAux != elem)
+//            throw cRuntimeError("Error in heap");
+
+        auto it = routeMap.find(elem.iD);
+        if (it == routeMap.end())
+            throw cRuntimeError("node not found in routeMap");
+
+        if (elem.iD != rootNode) {
+            if (it->second.label == perm)
+                continue; // nothing to do with this element
+        }
+
+        it->second.label = perm;
+
+        /// Record the route in the map
+        RouteMap::iterator itAux = it;
+        Route pathActive;
+        Route pathNode;
+        NodeId currentNode = elem.iD;
+        while (currentNode != rootNode) {
+            pathActive.push_back(currentNode);
+            currentNode = itAux->second.idPrev;
+            itAux = routeMap.find(currentNode);
+            if (itAux == routeMap.end())
+                throw cRuntimeError("error in data");
+        }
+
+        // next hop
+        auto linkIt = linkArray.find(elem.iD);
+        if (linkIt == linkArray.end())
+            throw cRuntimeError("Error link not found in linkArray");
+
+        for (unsigned int i = 0; i < linkIt->second.size(); i++) {
+            Edge* current_edge = (linkIt->second)[i];
+            FuzzyCost cost;
+            int hops;
+
+            auto itNext = routeMap.find(current_edge->last_node());
+
+            cost = current_edge->cost + it->second.cost;
+            hops = 1 + it->second.hops;
+
+
+            if (itNext == routeMap.end()) {
+                State state;
+                state.idPrev = elem.iD;
+                state.cost = cost;
+                state.hops = hops;
+                state.label = tent;
+                routeMap[current_edge->last_node()] = state;
+                SetElem newElem;
+                newElem.iD = current_edge->last_node();
+                newElem.cost = cost;
+                newElem.hops = hops;
+//                heap.push_back(newElem);
+                heap2.insert(newElem);
+            }
+            else {
+                if (itNext->second.label == perm) // nothing to do with this element
+                    continue;
+
+                bool actualize = false;
+                if (cost < itNext->second.cost)
+                    actualize = true;
+                else if  (cost == itNext->second.cost && itNext->second.hops > hops)
+                    actualize = true;
+                else if (cost == itNext->second.cost && itNext->second.hops == hops && itNext->second.idPrev > elem.iD)
+                    actualize = true;
+
+                if (actualize) {
+                    itNext->second.cost = cost;
+                    itNext->second.idPrev = elem.iD;
+                    itNext->second.hops = hops;
+                    SetElem newElem;
+                    newElem.iD = current_edge->last_node();
+                    newElem.cost = cost;
+                    newElem.hops = hops;
+//                    heap.push_back(newElem);
+                    heap2.insert(newElem);
+                }
+            }
+        }
+    }
+}
+
 
 void DijkstraFuzzy::run(const LinkArray &linkArray, RouteMap & routeMap)
 {
@@ -671,6 +812,15 @@ void DijkstraFuzzy::runDisjoint(const NodeId &rootNode, const NodeId &target, No
 
 void DijkstraFuzzy::runDisjoint(const NodeId &target)
 {
+    auto it = routeMap.find(target);
+    if (it == routeMap.end()) {
+        runClassic(linkArray, routeMap); // create route map
+        it = routeMap.find(target);
+        if (it == routeMap.end()) {
+            throw cRuntimeError("Not route found to node %i", target);
+
+        }
+    }
     runDisjoint(rootNode, target, partitionLinks, routeMap,linkArray, kRoutesMap);
 }
 
@@ -737,8 +887,8 @@ void DijkstraFuzzy::setFromTopo(const cTopology *topo)
             cChannel * channel = node->getModule()->gate("port$o", j)->getTransmissionChannel();
             double cost = 1 / channel->getNominalDatarate();
 
-            uint64_t val = channel->getNominalDatarate();
-            uint64_t valaux = channel->getNominalDatarate() * 0.1;
+            double val = channel->getNominalDatarate();
+            double valaux = channel->getNominalDatarate() * 0.1;
             double cost2 = 1 / (val - valaux);
 
             addEdge(id, idNex, cost, cost, cost2);

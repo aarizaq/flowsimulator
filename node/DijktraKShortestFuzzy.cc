@@ -530,8 +530,8 @@ void DijkstraKshortestFuzzy::setFromTopo(const cTopology *topo)
             cChannel * channel = node->getModule()->gate("port$o", j)->getTransmissionChannel();
             double cost = 1 / channel->getNominalDatarate();
 
-            uint64_t val = channel->getNominalDatarate();
-            uint64_t valaux = channel->getNominalDatarate() * 0.1;
+            double val = channel->getNominalDatarate();
+            double valaux = channel->getNominalDatarate() * 0.1;
             double cost2 = 1 / (val - valaux);
             addEdge(id, idNex, cost, cost, cost2);
         }

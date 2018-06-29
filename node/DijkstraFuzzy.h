@@ -46,6 +46,7 @@ typedef std::vector<std::pair<NodeId, NodeId> > NodePairs;
 
 class DijkstraFuzzy
 {
+    enum StateLabel {perm,tent};
 public:
     struct FuzzyCost
     {
@@ -100,6 +101,7 @@ public:
         FuzzyCost cost;
         NodeId idPrev;
         int hops = 0;
+        StateLabel label = tent;
         State();
         State(const FuzzyCost &cost);
         ~State();
@@ -155,6 +157,7 @@ protected:
     LinkArray linkArray;
     LinkArray uniqueLink;
     RouteMap routeMap;
+    RouteMap routeMapAux;
     NodeId rootNode;
     int K_LIMITE = 1;
     FuzzyCost limitsData;
@@ -190,6 +193,7 @@ public:
     virtual Edge * removeEdge(const NodeId & originNode, const NodeId & last_node);
     virtual void setRoot(const NodeId & dest_node);
     virtual void run();
+    virtual void runClassic(const LinkArray &linkArray, RouteMap&);
     virtual void run(const LinkArray &linkArray, RouteMap&);
     virtual void runUntil(const NodeId &, const LinkArray &linkArray, RouteMap&);
     virtual void runDisjoint(const NodeId & rootNode, const NodeId &target, NodePairs &partitionLinks, RouteMap &routeMap,const LinkArray &linkArray, MapRoutes &kRoutesMap);

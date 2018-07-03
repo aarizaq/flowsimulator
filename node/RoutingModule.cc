@@ -321,9 +321,9 @@ void RoutingModule::procActualize(Actualize *pkt)
             if (linkData.max > linkData.nominal)
                 throw cRuntimeError("Data error max");
             if (linkData.mean > linkData.nominal)
-                throw cRuntimeError("Data error max");
+                throw cRuntimeError("Data error mean");
             if (linkData.min > linkData.nominal)
-                throw cRuntimeError("Data error max");
+                throw cRuntimeError("Data error min");
 
             double minResidual = linkData.nominal - linkData.max;
             double meanResidual = linkData.nominal - linkData.mean;

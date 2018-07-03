@@ -37,7 +37,7 @@ bool FiniteQueue::startShare(std::vector<FlowInfo *> &listOut, std::vector<FlowI
     if (request < bw)
         return false; // nothing to do
     double p = (double) bw / (double) request;
-    if (p<1)
+    if (p > 1)
         p = 1.0;
     for (auto elem : listIn) {
         auto it = listOut.begin();

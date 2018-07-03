@@ -1662,6 +1662,13 @@ void CallApp::procActualize(Actualize *pkt)
             dijkstra->deleteEdge(nodeId, linkData.node);
         }
         else {
+            if (linkData.max > linkData.nominal)
+                throw cRuntimeError("Data error max");
+            if (linkData.mean > linkData.nominal)
+                throw cRuntimeError("Data error mean");
+            if (linkData.min > linkData.nominal)
+                throw cRuntimeError("Data error min");
+
             double minResidual = linkData.nominal - linkData.max;
             double meanResidual = linkData.nominal - linkData.mean;
             double maxResidual = linkData.nominal - linkData.min;
@@ -1717,8 +1724,6 @@ void CallApp::procActualize(Actualize *pkt)
 
             }
 
-            if (minResidual == 0)
-                throw cRuntimeError("Problems detected");
             dijFuzzy->addEdge(nodeId, linkData.node, minResidual, meanResidual, maxResidual);
             if (par("instValue").boolValue()) {
                 if (rType == SW || rType == WS)

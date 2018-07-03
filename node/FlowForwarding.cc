@@ -100,6 +100,8 @@ void FlowForwarding::recordOccupation(PortData &port, const ChangeBw &val)
         port.accmin = val.value;
     if (port.accmax < val.value)
         port.accmax = val.value;
+    if (val.value > port.nominalbw)
+        throw cRuntimeError("Incorrect value");
     double auxVal = port.lastC.value * SIMTIME_DBL(simTime() - port.lastC.instant);
     port.accmean +=  auxVal;
     port.varSamples.push_back(auxVal);
@@ -178,10 +180,12 @@ void FlowForwarding::computeUsedBw()
         elem.min = min;
         elem.max = max;
 #endif
-        double val = elem.lastC.value * SIMTIME_DBL((simTime() - elem.lastC.instant));
+        double timeVal = SIMTIME_DBL((simTime() - elem.lastC.instant));
+        double val = elem.lastC.value * timeVal;
         elem.accmean +=  val;
         elem.varSamples.push_back(val);
-        elem.mean = elem.accmean/interval.dbl();
+        double inter = interval.dbl();
+        elem.mean = elem.accmean/inter;
         if (elem.lastC.value < elem.accmin)
             elem.accmin = elem.lastC.value;
         if (elem.lastC.value > elem.accmax)
@@ -189,6 +193,12 @@ void FlowForwarding::computeUsedBw()
 
         elem.min = elem.accmin;
         elem.max = elem.accmax;
+        if (elem.min  > elem.nominalbw)
+            throw cRuntimeError("Computation min erroneous");
+        if (elem.mean  > elem.nominalbw)
+            throw cRuntimeError("Computation mean erroneous");
+        if (elem.max  > elem.nominalbw)
+            throw cRuntimeError("Computation max erroneous");
 
         for (auto elem2:elem.varSamples) {
             double auxVal = (elem2 - elem.accmean)/interval.dbl();
@@ -1815,6 +1825,7 @@ bool FlowForwarding::flodAdmision(const uint64_t &reserve, FlowInfo *flowInfoOut
                 uint64_t oc = 0;
                 for (auto elem : listFlowsToModify)
                     oc += elem->used;
+
                 portDataArray[portForward].flowOccupation = portDataArray[portForward].nominalbw - oc;
                 portDataArray[portForward].overload = true;
                 ChangeBw val;

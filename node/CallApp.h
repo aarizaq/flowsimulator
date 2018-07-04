@@ -76,6 +76,7 @@ private:
 
     struct FlowData
     {
+        uint64_t callId = 0;
         uint64_t flowId = -1;
         uint64_t usedBandwith = 0;
         uint64_t reservedBandwith = 0;
@@ -115,8 +116,10 @@ private:
         long double acumulateRec = 0;
         simtime_t startOn;
         simtime_t startOnRec;
+        simtime_t startOnRecBk;
         simtime_t interArrivalTime;
         uint64_t paketSize = 0;
+        bool disjoint = false;
     };
 
     struct FlowEvent
@@ -159,7 +162,9 @@ private:
     bool trace = false;
     void bytesTraceSend(const CallInfo *callInfo);
     void bytesTraceRec(const CallInfo *callInfo);
+    void bytesTraceRec(const CallInfo *callInfo, const FlowData &);
     void storeCallStatistics(const CallInfo *callInfo);
+    void storeCallStatistics(const CallInfo *callInfo, const FlowData &);
     static simsignal_t actualizationSignal;
     static simsignal_t rcvdPk;
 

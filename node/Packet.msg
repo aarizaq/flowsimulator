@@ -78,6 +78,7 @@ packet Packet extends Base
     uint64_t callId;
     uint64_t callIdBk;
     bool principal = true;
+    bool disjoint = false;
 }
  
 packet Actualize extends Packet

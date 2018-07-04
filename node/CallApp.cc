@@ -491,6 +491,24 @@ void CallApp::bytesTraceRec(const CallInfo *callInfo)
     myfile << "Dest " << callInfo->dest  << " CalId :" << callInfo->callId <<"   bw: " << callInfo->usedBandwith << " t " << tm << " brec " << brec << "\n";
 }
 
+void CallApp::bytesTraceRec(const CallInfo *callInfo, const FlowData &flow)
+{
+
+    if (!trace) return;
+
+    double brec = flow.recBandwith * SIMTIME_DBL(simTime() - flow.startOnRec);
+    double tm = SIMTIME_DBL(simTime() - flow.startOnRec);
+
+    char fileName[100];
+    memset(fileName,0,sizeof(fileName));
+    sprintf(fileName,"Rec-%i",myAddress);
+    std::ofstream myfile;
+    myfile.open(fileName, std::ios::out | std::ios::app);
+
+    myfile << simTime().dbl() << " " << flow.startOnRec << " ";
+    myfile << "Dest " << callInfo->dest  << " CalId :" << callInfo->callId <<"   bw: " << callInfo->usedBandwith << " t " << tm << " brec " << brec << "\n";
+}
+
 void CallApp::bytesTraceSend(const CallInfo *callInfo)
 {
 
@@ -536,22 +554,57 @@ void CallApp::newCallFlow(CallInfo *callInfo, const uint64_t  &bw)
         newCallPacket(callInfo);
         return;
     }
+    if (callInfo->disjoint) {
+        uint64_t  half = (callInfo->usedBandwith) >> 1;
+        uint64_t  half2 = callInfo->usedBandwith - half;
 
-    Packet *pkFlow = new Packet();
-    pkFlow->setSourceId(par("sourceId").intValue());
-    pkFlow->setDestinationId(callInfo->sourceId);
-    pkFlow->setSrcAddr(myAddress);
-    pkFlow->setDestAddr(callInfo->dest);
-    pkFlow->setType(STARTFLOW);
-    pkFlow->setReserve(callInfo->usedBandwith);
-    pkFlow->setFlowId(callInfo->flowId);
-    pkFlow->setCallId(callInfo->callId);
-    sprintf(pkname, "FlowOn-%d-to-%d-#%" PRIu64 "-Sid-%d-FlowId-%" PRIu64 "", myAddress,
-            pkFlow->getDestAddr(), pkFlow->getCallId(),
-            this->getIndex(), callInfo->flowId);
-    pkFlow->setName(pkname);
+        Packet *pkFlow = new Packet();
+        pkFlow->setSourceId(par("sourceId").intValue());
+        pkFlow->setDestinationId(callInfo->sourceId);
+        pkFlow->setSrcAddr(myAddress);
+        pkFlow->setDestAddr(callInfo->dest);
+        pkFlow->setType(STARTFLOW);
+        pkFlow->setReserve(half);
+        pkFlow->setFlowId(callInfo->flowId);
+        pkFlow->setCallId(callInfo->flowData[0].callId);
+        callInfo->flowData[0].state = ON;
+        callInfo->flowData[1].state = ON;
+        callInfo->flowData[0].startOn = simTime();
+        callInfo->flowData[1].startOn = simTime();
 
-    send(pkFlow, "out");
+        Packet *pkFlow2 = new Packet();
+        pkFlow2->setCallId(callInfo->flowData[1].callId);
+        pkFlow2->setReserve(half2);
+
+        sprintf(pkname, "FlowOn-%d-to-%d-#%" PRIu64 "-Sid-%d-FlowId-%" PRIu64 "", myAddress,
+                pkFlow->getDestAddr(), pkFlow->getCallId(),
+                this->getIndex(), callInfo->flowId);
+        pkFlow->setName(pkname);
+        sprintf(pkname, "FlowOn-%d-to-%d-#%" PRIu64 "-Sid-%d-FlowId-%" PRIu64 "", myAddress,
+                pkFlow->getDestAddr(), pkFlow->getCallId(),
+                this->getIndex(), callInfo->flowId);
+        pkFlow2->setName(pkname);
+
+        send(pkFlow, "out");
+        send(pkFlow2, "out");
+    }
+    else {
+        Packet *pkFlow = new Packet();
+        pkFlow->setSourceId(par("sourceId").intValue());
+        pkFlow->setDestinationId(callInfo->sourceId);
+        pkFlow->setSrcAddr(myAddress);
+        pkFlow->setDestAddr(callInfo->dest);
+        pkFlow->setType(STARTFLOW);
+        pkFlow->setReserve(callInfo->usedBandwith);
+        pkFlow->setFlowId(callInfo->flowId);
+        pkFlow->setCallId(callInfo->callId);
+        sprintf(pkname, "FlowOn-%d-to-%d-#%" PRIu64 "-Sid-%d-FlowId-%" PRIu64 "", myAddress,
+                pkFlow->getDestAddr(), pkFlow->getCallId(),
+                this->getIndex(), callInfo->flowId);
+        pkFlow->setName(pkname);
+
+        send(pkFlow, "out");
+    }
 }
 
 
@@ -644,9 +697,6 @@ double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2)
     }
     else
         pkFlow->setReserve(callInfo->usedBandwith);
-
-
-
     return TimeOff->doubleValue();
 }
 
@@ -881,7 +931,7 @@ void CallApp::procNextEvent()
         pkFlow->setSrcAddr(myAddress);
 
 
-        if (routingModule->getRoutingType() == IRouting::DISJOINT && callInfo->callIdBk > 0)
+        if (callInfo->disjoint)
         {
             pkFlow2 = new Packet();
             pkFlow2->setDestAddr(callInfo->dest);
@@ -893,7 +943,7 @@ void CallApp::procNextEvent()
         }
 
 
-        if (callInfo->flowData.empty()) {
+        if (callInfo->flowData.empty() || callInfo->disjoint) {
             if (callInfo->state == ON) {
                 callInfo->interArrivalTime = SimTime::ZERO;
                 delayAux = endCallFlow(callInfo, pkFlow, pkFlow2);
@@ -1015,9 +1065,15 @@ void CallApp::newCall() {
             routingModule->getPairRoutes(destAddress,r1,r2);
         // TODO: backup mode Se deben enviar dos paquetes, uno por cada ruta
         // new call id for backup route
+        if (par("disjointRoute").boolValue() && r1.empty() && r2.empty())
+            throw cRuntimeError("only a route");
+        if (par("disjointRoute").boolValue() || routingModule->getRoutingType() == IRouting::DISJOINT)
+            pk->setDisjoint(true);
         Packet *pk2 = pk->dup();
         pk2->setCallId(callIdentifier);
         callIdentifier++;
+        pk->setDisjoint(true);
+        pk2->setDisjoint(true);
         pk2->setCallIdBk(pk->getCallId());
         pk->setCallIdBk(pk2->getCallId());
         pk2->setRouteArraySize(r1.size());
@@ -1030,6 +1086,7 @@ void CallApp::newCall() {
         }
         pk2->setType(RESERVEBK);
         // send before the best
+        send(pk, "out");
         send(pk2, "out");
     }
     else {
@@ -1038,9 +1095,10 @@ void CallApp::newCall() {
         for (unsigned int i = 0; i < r1.size(); i++) {
             pk->setRoute(i, r1[i]);
         }
+        send(pk, "out");
     }
 // TODO : recall timer,
-    send(pk, "out");
+
 }
 
 void CallApp::newReserve(Packet *pk)
@@ -1080,8 +1138,17 @@ void CallApp::newReserve(Packet *pk)
             callInfo->callIdBk = pk->getCallId();
             if (callInfo->dest == myAddress)
                 throw cRuntimeError("Address destination Error");
+            if (pk->getDisjoint())
+                callInfo->disjoint = true; // both routes active.
             backupCalls.insert(std::make_pair(pk->getCallId(), callInfo));
             activeCall = false;
+            if (pk->getDisjoint()) {
+                // prepare disjoint
+                callInfo->disjoint = true;
+                callInfo->flowData.resize(2);
+                callInfo->flowData[0].callId = pk->getCallIdBk();
+                callInfo->flowData[1].callId = pk->getCallId();
+            }
         }
         else {
             // there isn't any available, create a new information
@@ -1142,6 +1209,9 @@ void CallApp::newAccepted(Packet *pk) {
     bool activeCall = true;
     // check if exist the backup
     if (pk->getCallIdBk() != 0) {
+        if (pk->getDisjoint()) {
+            activeCall = false; // must both paths acitive
+        }
         auto itAux3 = activeCalls.find(pk->getCallIdBk());
         if (itAux3 != activeCalls.end()) {
             callInfo = itAux3->second;
@@ -1150,11 +1220,25 @@ void CallApp::newAccepted(Packet *pk) {
                 throw cRuntimeError("Address destination Error");
             backupCalls.insert(std::make_pair(callInfo->callIdBk, callInfo));
             activeCall = false;
+            if (pk->getDisjoint()) {
+                activeCall = true;
+                callInfo->disjoint = true;
+                callInfo->flowData.resize(2);
+                callInfo->flowData[0].callId = pk->getCallIdBk();
+                callInfo->flowData[1].callId = pk->getCallId();
+            }
         }
         else {// check alternative list
             auto itAux3 = backupCalls.find(pk->getCallIdBk());
             if (itAux3 != backupCalls.end()) {
                 callInfo = itAux3->second;
+                if (pk->getDisjoint()) {
+                    activeCall = true;
+                    callInfo->disjoint = true;
+                    callInfo->flowData.resize(2);
+                    callInfo->flowData[0].callId = pk->getCallIdBk();
+                    callInfo->flowData[1].callId = pk->getCallId();
+                }
             }
             else {
                 callInfo = new CallInfo;
@@ -1235,6 +1319,37 @@ void CallApp::storeCallStatistics(const CallInfo *callInfo) {
     }
 }
 
+void CallApp::storeCallStatistics(const CallInfo *callInfo, const FlowData & flow) {
+
+    if (flow.state == ON) {
+        bytesTraceSend (callInfo);
+        double bsend = flow.usedBandwith
+                * SIMTIME_DBL(simTime() - flow.startOn);
+        const_cast<CallInfo *>(callInfo)->acumulateSend += ((bsend) / 1000.0);
+    }
+
+    if (flow.stateRec == ON) {
+        bytesTraceRec (callInfo, flow);
+        double brec = flow.recBandwith
+                * SIMTIME_DBL(simTime() - flow.startOnRec);
+        const_cast<CallInfo *>(callInfo)->acumulateRec += (brec / 1000.0);
+    }
+
+// record the statistics
+    if (simulationMode == FLOWMODE) {
+        auto itAccSend = sendBytes.find(callInfo->dest);
+        auto itAccRec = receivedBytes.find(callInfo->dest);
+        if (itAccSend == sendBytes.end())
+            sendBytes[callInfo->dest] = callInfo->acumulateSend;
+        else
+            itAccSend->second += callInfo->acumulateSend;
+        if (itAccRec == receivedBytes.end())
+            receivedBytes[callInfo->dest] = callInfo->acumulateRec;
+        else
+            itAccRec->second += callInfo->acumulateRec;
+    }
+}
+
 void CallApp::release(Packet *pk) {
 
     // Handle incoming packet
@@ -1244,7 +1359,7 @@ void CallApp::release(Packet *pk) {
 
 
 
-    if (pk->isSelfMessage()) {
+    if (pk->isSelfMessage()) { // local release
         // search in the list
         auto itPendingRelease = std::find(listPendingRelease.begin(),listPendingRelease.end(),pk);
         if (itPendingRelease == listPendingRelease.end()) {
@@ -1279,7 +1394,7 @@ void CallApp::release(Packet *pk) {
 
     if (it != activeCalls.end()) {
         if (pk->isSelfMessage() && it->second->callIdBk != 0)
-        {
+        { // local release with backup route, release backup route.
             // release backup route
             Packet * pkt = pk->dup();
             pkt->setCallId(it->second->callIdBk);
@@ -1288,8 +1403,34 @@ void CallApp::release(Packet *pk) {
             if (pkt->getDestAddr() == myAddress)
                 throw cRuntimeError("Destination address erroneous");
             send(pkt, "out");
+
+            if (it->second->disjoint) {
+                CallInfo *callInfo = it->second;
+                if (callInfo->stateRec == ON) {
+                    for (auto &elem : callInfo->flowData) {
+                        bytesTraceRec(callInfo);
+                        callInfo->acumulateRec += ((elem.recBandwith
+                                * SIMTIME_DBL(simTime() - elem.startOnRec))/1000);
+                        // send off in the o
+                        elem.stateRec = OFF;
+                    }
+                    callInfo->stateRec = OFF;
+                }
+                if (callInfo->state == ON) {
+                    for (auto &elem : callInfo->flowData) {
+                        bytesTraceSend(callInfo, elem);
+                        callInfo->acumulateSend += ((elem.usedBandwith * SIMTIME_DBL(simTime() - elem.startOn)) / 1000);
+                        // send off in the o
+                    }
+                    callInfo->disjoint = false;
+                    callInfo->state = OFF;
+                }
+                it->second->disjoint = false;
+                callInfo->flowData.clear();
+            }
             it->second->callIdBk = 0;
         }
+
         // delete all events relative to this call
         CallInfo *callInfo = it->second;
         for (auto it = CallEvents.begin(); it != CallEvents.end();) {
@@ -1301,6 +1442,7 @@ void CallApp::release(Packet *pk) {
 
         if (callInfo->callIdBk != 0) // change to backup route
         {
+            // if arrive here, is a remote release,
             for (auto & elem : listPendingRelease) {
                 if (elem->getCallId() == callInfo->callId) {
                     elem->setCallId(callInfo->callIdBk);
@@ -1313,10 +1455,43 @@ void CallApp::release(Packet *pk) {
                 backupCalls.erase(itAux);
             else
                 throw cRuntimeError("Check bk table");
+            itAux->second->disjoint = false;
 
             // if active flows send end
+            if (callInfo->disjoint && callInfo->state == ON) { // remote release
+
+                for (auto &elem : callInfo->flowData) {
+                    bytesTraceSend(callInfo, elem);
+                    callInfo->acumulateSend += ((elem.usedBandwith * SIMTIME_DBL(simTime() - elem.startOn)) / 1000);
+                    // send off in the o
+                    elem.state = OFF;
+                    if (simulationMode != PACKETMODE) {
+                        Packet *pkFlow = new Packet();
+                        pkFlow->setDestAddr(callInfo->dest);
+                        pkFlow->setCallId(elem.callId);
+                        pkFlow->setSourceId(par("sourceId").intValue());
+                        pkFlow->setDestinationId(callInfo->sourceId);
+                        pkFlow->setType(ENDFLOW);
+                        pkFlow->setFlowId(elem.flowId);
+                        pkFlow->setReserve(elem.usedBandwith);
+                        char pkname[60];
+                        sprintf(pkname,
+                                "FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "Sid-%d",
+                                myAddress, pkFlow->getDestAddr(),
+                                pkFlow->getCallId(), pkFlow->getFlowId(),
+                                this->getIndex());
+                        pkFlow->setName(pkname);
+                        send(pkFlow, "out");
+                    }
+                    CallEvents.insert(std::make_pair(simTime() + TimeOff->doubleValue(), callInfo));
+                }
+                callInfo->disjoint = false;
+                callInfo->state = OFF;
+                callInfo->flowData.clear();
+            }
+
             if (callInfo->state == ON) {
-                 bytesTraceSend(callInfo);
+                bytesTraceSend(callInfo);
                 callInfo->acumulateSend += ((callInfo->usedBandwith
                         * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
                 // send off in the o
@@ -1371,6 +1546,7 @@ void CallApp::release(Packet *pk) {
     {
             // erase backup
             it2->second->callIdBk = 0;
+            it2->second->disjoint = false;
             backupCalls.erase(it2);
             // Nothing more to do
     }
@@ -1406,21 +1582,51 @@ void CallApp::procFlowPk(Packet *pk) {
     if (pk->getType() == ENDFLOW) {
         emit(rcvdPk,pk);
         if (flowId.callId() > 0) {
+            CallInfo * callInfo = nullptr;
             auto itAux = activeCalls.find(flowId.callId());
-            if (itAux == activeCalls.end())
+            auto itAuxBk = backupCalls.find(flowId.callId());
+            if (itAux != activeCalls.end()) // check if in backup
+                callInfo = itAux->second;
+            else if (itAuxBk != backupCalls.end())
+                callInfo = itAuxBk->second;
+            else
                 throw cRuntimeError("Call id not found but flow received");
-            CallInfo * callInfo = itAux->second;
-            bytesTraceRec(callInfo);
+            if (callInfo->disjoint) { // use multiflow
+                bool found = false;
+                FlowData flow;
 
-            double brec = callInfo->recBandwith
-                    * SIMTIME_DBL(simTime() - callInfo->startOnRec);
-            callInfo->acumulateRec += (brec/1000.0);
-            callInfo->stateRec = OFF;
-
-            EV << "Rec Call Id :" << callInfo->callId << "Flow Id :"
-                      << callInfo->flowId << " Time in on :"
-                      << (simTime() - callInfo->startOnRec) << "Brec :" << brec;
-
+                for (auto it = callInfo->flowData.begin(); it != callInfo->flowData.end();) {
+                    if (it->callId == flow.callId && it->flowId == flow.flowId) {
+                        found = true;
+                        flow = (*it);
+                        callInfo->flowData.erase(it);
+                        break;
+                    }
+                    ++it;
+                }
+                if (found) {
+                    // accumulate
+                    double brec = flow.recBandwith
+                            * SIMTIME_DBL(simTime() - flow.startOnRec);
+                    callInfo->acumulateRec += (brec/1000.0);
+                    callInfo->stateRec = OFF;
+                    EV << "Rec Call Id :" << callInfo->callId << "Flow Id :"
+                            << flow.flowId << " Time in on :"
+                            << (simTime() - flow.startOnRec) << "Brec :" << brec;
+                }
+                else
+                    throw cRuntimeError("Flow is not registered");
+            }
+            else {
+                bytesTraceRec(callInfo);
+                double brec = callInfo->recBandwith
+                        * SIMTIME_DBL(simTime() - callInfo->startOnRec);
+                callInfo->acumulateRec += (brec/1000.0);
+                callInfo->stateRec = OFF;
+                EV << "Rec Call Id :" << callInfo->callId << "Flow Id :"
+                        << callInfo->flowId << " Time in on :"
+                        << (simTime() - callInfo->startOnRec) << "Brec :" << brec;
+            }
         }
         else {
             auto it = flowStatistics.find(flowId);
@@ -1441,99 +1647,125 @@ void CallApp::procFlowPk(Packet *pk) {
         if (flowId.callId() > 0) {
             CallInfo * callInfo = nullptr;
             auto itAux = activeCalls.find(flowId.callId());
-            if (itAux == activeCalls.end()) {
-                // check backup
-                itAux = backupCalls.find(flowId.callId());
-                if (itAux == backupCalls.end())
-                    throw cRuntimeError("Call Id not found in any list %i",flowId.callId());
-
-                // change to backup route
+            auto itAuxBk = backupCalls.find(flowId.callId());
+            if (itAux == activeCalls.end() && itAuxBk == backupCalls.end())
+                throw cRuntimeError("Call Id not found in any list %i",
+                        flowId.callId());
+            if (itAux != activeCalls.end())
                 callInfo = itAux->second;
-                // if there is a active flow stop it and change to the other
-                /*if (callInfo->state == ON) {
-
-                    for (auto it = CallEvents.begin(); it != CallEvents.end();) {
-                        if (it->second->callId == callInfo->callId)
-                            CallEvents.erase(it++);
-                        else
-                            ++it;
-                    }
-                    bytesTraceSend(callInfo);
-                    callInfo->acumulateSend += ((callInfo->recBandwith
-                            * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
-                    // send off in the o
-                    callInfo->state = OFF;
-                    Packet *pkFlow = new Packet();
-                    pkFlow->setDestAddr(callInfo->dest);
-                    pkFlow->setCallId(callInfo->callId);
-                    pkFlow->setSourceId(par("sourceId").intValue());
-                    pkFlow->setDestinationId(callInfo->sourceId);
-                    pkFlow->setType(ENDFLOW);
-                    pkFlow->setFlowId(callInfo->flowId);
-                    pkFlow->setReserve(callInfo->usedBandwith);
-                    char pkname[60];
-                    sprintf(pkname,"FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
-                    pkFlow->setName(pkname);
-                    if (pkFlow->getDestAddr() == myAddress)
-                        throw cRuntimeError("Destination address erroneous");
-                    send(pkFlow, "out");
-                    CallEvents.insert(std::make_pair(simTime()+TimeOff->doubleValue(), callInfo));
-                }*/
-
-                uint64_t callId = callInfo->callId;
-                uint64_t calIdbk = callInfo->callIdBk;
-                callInfo->callId = calIdbk;
-                callInfo->callIdBk = callId;
-                backupCalls.erase(itAux);
-                itAux = activeCalls.find(callId);
-
-                if (itAux != activeCalls.end())
-                    activeCalls.erase(itAux);
-
-                if (callInfo->dest == myAddress)
-                    throw cRuntimeError("Address destination Error");
-
-                if (callId != 0)
-                    backupCalls.insert(std::make_pair(callId,callInfo));
-                activeCalls.insert(std::make_pair(calIdbk,callInfo));
-
-                //
-                if (callInfo->state == ON) {
-                    for (auto it = CallEvents.begin(); it != CallEvents.end();) {
-                        if (it->second->callId == callId)
-                            CallEvents.erase(it++);
-                        else
-                            ++it;
-                    }
-                    bytesTraceSend(callInfo);
-                    callInfo->acumulateSend += ((callInfo->usedBandwith
-                            * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
-                    // send off in the o
-                    callInfo->state = OFF;
-                    Packet *pkFlow = new Packet();
-                    pkFlow->setDestAddr(callInfo->dest);
-                    pkFlow->setCallId(callId);
-                    pkFlow->setSourceId(par("sourceId").intValue());
-                    pkFlow->setDestinationId(callInfo->sourceId);
-                    pkFlow->setType(ENDFLOW);
-                    pkFlow->setFlowId(callInfo->flowId);
-                    pkFlow->setReserve(callInfo->usedBandwith);
-                    char pkname[60];
-
-                    sprintf(pkname,"FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
-                    pkFlow->setName(pkname);
-                    if (pkFlow->getDestAddr() == myAddress)
-                        throw cRuntimeError("Destination address erroneous");
-                    send(pkFlow, "out");
-                    CallEvents.insert(std::make_pair(simTime()+TimeOff->doubleValue(), callInfo));
+            else if (itAuxBk != backupCalls.end())
+                callInfo = itAuxBk->second;
+            if (callInfo->disjoint) { // use multiflow
+                FlowData flow;
+                flow.callId = flowId.callId();
+                flow.flowId = flowId.flowId();
+                flow.recBandwith = (uint64_t) pk->getReserve();
+                flow.stateRec = ON;
+                flow.startOnRec = simTime();
+                // search if present
+                for (auto elem : callInfo->flowData) {
+                    if (elem.callId == flow.callId && elem.flowId == flow.flowId)
+                        throw cRuntimeError("Flow if already present in the flow list of the call");
                 }
+                callInfo->flowData.push_back(flow);
             }
-            else
-                callInfo = itAux->second;
+            else {
+                if (itAux == activeCalls.end()) {
+                    // check backup
+                    // change to backup route
+                    // if there is a active flow stop it and change to the other
+                    /*if (callInfo->state == ON) {
 
-            callInfo->recBandwith = (uint64_t) pk->getReserve();
-            callInfo->startOnRec = simTime();
-            callInfo->stateRec = ON;
+                     for (auto it = CallEvents.begin(); it != CallEvents.end();) {
+                     if (it->second->callId == callInfo->callId)
+                     CallEvents.erase(it++);
+                     else
+                     ++it;
+                     }
+                     bytesTraceSend(callInfo);
+                     callInfo->acumulateSend += ((callInfo->recBandwith
+                     * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
+                     // send off in the o
+                     callInfo->state = OFF;
+                     Packet *pkFlow = new Packet();
+                     pkFlow->setDestAddr(callInfo->dest);
+                     pkFlow->setCallId(callInfo->callId);
+                     pkFlow->setSourceId(par("sourceId").intValue());
+                     pkFlow->setDestinationId(callInfo->sourceId);
+                     pkFlow->setType(ENDFLOW);
+                     pkFlow->setFlowId(callInfo->flowId);
+                     pkFlow->setReserve(callInfo->usedBandwith);
+                     char pkname[60];
+                     sprintf(pkname,"FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow->getDestAddr(),  pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
+                     pkFlow->setName(pkname);
+                     if (pkFlow->getDestAddr() == myAddress)
+                     throw cRuntimeError("Destination address erroneous");
+                     send(pkFlow, "out");
+                     CallEvents.insert(std::make_pair(simTime()+TimeOff->doubleValue(), callInfo));
+                     }*/
+
+                    uint64_t callId = callInfo->callId;
+                    uint64_t calIdbk = callInfo->callIdBk;
+                    callInfo->callId = calIdbk;
+                    callInfo->callIdBk = callId;
+                    backupCalls.erase(itAux);
+                    itAux = activeCalls.find(callId);
+
+                    if (itAux != activeCalls.end())
+                        activeCalls.erase(itAux);
+
+                    if (callInfo->dest == myAddress)
+                        throw cRuntimeError("Address destination Error");
+
+                    if (callId != 0)
+                        backupCalls.insert(std::make_pair(callId, callInfo));
+                    activeCalls.insert(std::make_pair(calIdbk, callInfo));
+
+                    //
+                    if (callInfo->state == ON) {
+                        for (auto it = CallEvents.begin();
+                                it != CallEvents.end();) {
+                            if (it->second->callId == callId)
+                                CallEvents.erase(it++);
+                            else
+                                ++it;
+                        }
+                        bytesTraceSend(callInfo);
+                        callInfo->acumulateSend += ((callInfo->usedBandwith
+                                * SIMTIME_DBL(simTime() - callInfo->startOn))
+                                / 1000);
+                        // send off in the o
+                        callInfo->state = OFF;
+                        Packet *pkFlow = new Packet();
+                        pkFlow->setDestAddr(callInfo->dest);
+                        pkFlow->setCallId(callId);
+                        pkFlow->setSourceId(par("sourceId").intValue());
+                        pkFlow->setDestinationId(callInfo->sourceId);
+                        pkFlow->setType(ENDFLOW);
+                        pkFlow->setFlowId(callInfo->flowId);
+                        pkFlow->setReserve(callInfo->usedBandwith);
+                        char pkname[60];
+
+                        sprintf(pkname,
+                                "FlowOff-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d",
+                                myAddress, pkFlow->getDestAddr(),
+                                pkFlow->getCallId(), pkFlow->getFlowId(),
+                                this->getIndex());
+                        pkFlow->setName(pkname);
+                        if (pkFlow->getDestAddr() == myAddress)
+                            throw cRuntimeError(
+                                    "Destination address erroneous");
+                        send(pkFlow, "out");
+                        CallEvents.insert(
+                                std::make_pair(
+                                        simTime() + TimeOff->doubleValue(),
+                                        callInfo));
+                    }
+                }
+                callInfo->recBandwith = (uint64_t) pk->getReserve();
+                callInfo->startOnRec = simTime();
+                callInfo->stateRec = ON;
+            }
         }
         else {
             // register the flow;

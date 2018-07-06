@@ -77,7 +77,8 @@ private:
     struct FlowData
     {
         uint64_t callId = 0;
-        uint64_t flowId = -1;
+        uint64_t flowId = 0;
+        uint64_t flowIdRec = 0;
         uint64_t usedBandwith = 0;
         uint64_t reservedBandwith = 0;
         uint64_t recBandwith = 0;
@@ -106,6 +107,7 @@ private:
         uint64_t callIdBk = 0;
         uint64_t callActive = -1; // only if disjoint
         uint64_t flowId = 0;
+        uint64_t flowIdRec = -1;
         State state = WAITCONFIRMATION;
         State stateRec = OFF;
         uint64_t usedBandwith = 0;
@@ -161,6 +163,7 @@ private:
 private:
     bool trace = false;
     void bytesTraceSend(const CallInfo *callInfo);
+    void bytesTraceSend(const CallInfo *callInfo, const FlowData &flow);
     void bytesTraceRec(const CallInfo *callInfo);
     void bytesTraceRec(const CallInfo *callInfo, const FlowData &);
     void storeCallStatistics(const CallInfo *callInfo);

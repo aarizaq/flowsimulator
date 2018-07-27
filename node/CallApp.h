@@ -115,6 +115,7 @@ private:
         uint64_t recBandwith = 0;
         std::vector<FlowData> flowData; // multi flow calls
         long double acumulateSend = 0;
+        long double acumulateSend2 = 0;
         long double acumulateRec = 0;
         simtime_t startOn;
         simtime_t startOnRec;

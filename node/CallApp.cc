@@ -595,6 +595,9 @@ void CallApp::newCallFlow(CallInfo *callInfo, const uint64_t  &bw)
         pkFlow2->setCallId(callInfo->flowData[1].callId);
         pkFlow2->setReserve(half2);
 
+        callInfo->flowData[0].usedBandwith = pkFlow->getReserve();
+        callInfo->flowData[1].usedBandwith = pkFlow2->getReserve();
+
         sprintf(pkname, "FlowOn-%d-to-%d-#%" PRIu64 "-Sid-%d-FlowId-%" PRIu64 "", myAddress,
                 pkFlow->getDestAddr(), pkFlow->getCallId(),
                 this->getIndex(), callInfo->flowId);
@@ -637,7 +640,6 @@ double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow
     callInfo->paketSize = packetSize->intValue();
     pkFlow->setType(STARTFLOW);
     callInfo->startOn = simTime();
-
 
     sprintf(pkname, "FlowOn-%d-to-%d-CallId#%" PRIu64 "-FlowId#%" PRIu64 "-Sid-%d", myAddress, pkFlow->getDestAddr(),
             pkFlow->getCallId(), pkFlow->getFlowId(), this->getIndex());
@@ -700,6 +702,9 @@ double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2)
                 " Time in on :" << callInfo->startOn << "Bsend :" << bsend;
     }
     else {
+        double bsend3 = callInfo->usedBandwith * SIMTIME_DBL(simTime() - callInfo->startOn);
+                callInfo->acumulateSend2 += (bsend3/1000.0);
+
         double bsend = callInfo->flowData[0].usedBandwith * SIMTIME_DBL(simTime() - callInfo->flowData[0].startOn);
         double bsend2 = callInfo->flowData[1].usedBandwith * SIMTIME_DBL(simTime() - callInfo->flowData[1].startOn);
         callInfo->flowData[0].state = OFF;
@@ -753,6 +758,9 @@ double CallApp::startCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow
     pkFlow->setReserve(elem.usedBandwith);
     pkFlow->setType(STARTFLOW);
     callInfo->startOn = simTime();
+
+    throw cRuntimeError("Method not supported yet startCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2, FlowData & elem)");
+
     sprintf(pkname, "FlowOn-%d-to-%d-CallId#%" PRIu64 " - FlowId#%" PRIu64 " -Sid-%d",
             myAddress, pkFlow->getDestAddr(),
             pkFlow->getCallId(),pkFlow->getFlowId(), this->getIndex());
@@ -793,6 +801,8 @@ double CallApp::endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2,
 {
     char pkname[100];
 
+
+    throw cRuntimeError("Method not supported yet endCallFlow(CallInfo *callInfo, Packet *pkFlow, Packet *pkFlow2, FlowData & elem)");
     bytesTraceRec(callInfo);
     callInfo->acumulateSend += ((elem.usedBandwith * SIMTIME_DBL(simTime() - elem.startOn))/1000.0);
     pkFlow->setFlowId(elem.flowId);
@@ -1442,6 +1452,11 @@ void CallApp::release(Packet *pk) {
         throw cRuntimeError("Call Id not found in any list");
 
     if (callInfo != nullptr) {
+        if (callInfo->state == ON) {
+            callInfo->acumulateSend2 += ((callInfo->usedBandwith
+                * SIMTIME_DBL(simTime() - callInfo->startOn))/1000);
+        }
+
         if (pk->isSelfMessage() && callInfo->callIdBk != 0)
         { // local release with backup route, release backup route.
             // release backup route
@@ -1468,9 +1483,10 @@ void CallApp::release(Packet *pk) {
                         // send off in the o
                         elem.stateRec = OFF;
                     }
-                    if (elem.state == OFF) {
+                    if (elem.state == ON) {
                         for (auto &elem : callInfo->flowData) {
                             bytesTraceSend(callInfo, elem);
+                            elem.state = OFF;
                             callInfo->acumulateSend += ((elem.usedBandwith * SIMTIME_DBL(simTime() - elem.startOn)) / 1000);
                             // send off in the o
                         }

@@ -27,6 +27,7 @@ class CallApp : public cSimpleModule
 protected:
     SimulationMode simulationMode = FLOWMODE;
 private:
+    static std::vector<int> commonDestAddresses;
     // configuration
     int myAddress;
     std::vector<int> destAddresses;

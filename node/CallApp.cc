@@ -22,6 +22,7 @@ uint64_t CallApp::callIdentifier = 1;
 bool CallApp::residual = false;
 simsignal_t CallApp::actualizationSignal = registerSignal("actualizationSignal");
 simsignal_t CallApp::rcvdPk = registerSignal("rcvdPk");
+std::vector<int> CallApp::commonDestAddresses;
 
 //#define ONLYONECALL
 
@@ -416,6 +417,7 @@ void CallApp::checkDijktra()
 CallApp::CallApp()
 {
     callIdentifier = 1;
+    commonDestAddresses.clear();
 }
 
 CallApp::~CallApp()
@@ -1980,7 +1982,43 @@ void CallApp::procFlowPk(Packet *pk) {
 
 void CallApp::getNodesAddress(const char *destAddressesPar, std::vector<int> &listAddres)
 {
+
+    if (commonDestAddresses.empty() && par("randomAddress").boolValue()) {
+        if (par("numNodesRand").intValue() >= 0) {
+            cTopology topo("topo");
+            std::vector<std::string> nedTypes;
+            nedTypes.push_back(getParentModule()->getNedTypeName());
+            topo.extractByNedTypeName(nedTypes);
+            std::vector<int> templistAddres;
+            for (int i = 0; i < topo.getNumNodes(); i++) {
+                cTopology::Node *node = topo.getNode(i);
+                int destAddr = node->getModule()->par("address");
+                templistAddres.push_back(destAddr);
+            }
+            if (templistAddres.size() < par("numNodesRand").intValue())
+                throw cRuntimeError("templistAddres.size() < numNodesRand");
+            while (commonDestAddresses.size() != par("numNodesRand").intValue()) {
+                int pos = intrand(templistAddres.size());
+                int val = templistAddres[pos];
+                auto it = std::find(commonDestAddresses.begin(), commonDestAddresses.end(), val);
+                if (it == commonDestAddresses.end())
+                    commonDestAddresses.push_back(val);
+            }
+        }
+    }
+
     listAddres.clear();
+    if (!commonDestAddresses.empty() && par("randomAddress").boolValue()) {
+        auto it = std::find(commonDestAddresses.begin(), commonDestAddresses.end(), myAddress);
+        if (it != commonDestAddresses.end()) {
+            for (unsigned int i = 0; i < commonDestAddresses.size(); i++) {
+                if (commonDestAddresses[i] != myAddress)
+                    listAddres.push_back(commonDestAddresses[i]);
+            }
+        }
+        return;
+    }
+
     const char *token;
     if (strcmp(destAddressesPar,"any")==0) {
         cTopology topo("topo");
@@ -2035,7 +2073,6 @@ void CallApp::initialize()
     WATCH(myAddress);
     WATCH_MAP(receivedBytes);
     WATCH_MAP(sendBytes);
-
 
     getNodesAddress(par("destAddresses"),destAddresses);
 

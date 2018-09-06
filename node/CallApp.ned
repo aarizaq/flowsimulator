@@ -16,7 +16,12 @@ simple CallApp like IApp
 {
     parameters:
         int address;  // local node address
+        
         string destAddresses = default("");  // destination addresses
+        bool randomAddress = default(false);
+        int numNodesRand = default(-1);
+        
+        
         bool disjointRoute = default(false);
         int sourceId = default(0);
         int destinationId = default(0);

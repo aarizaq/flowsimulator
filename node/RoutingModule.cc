@@ -83,7 +83,7 @@ void RoutingModule::getPairRoutes(const int & destAddress, std::vector<int> &pat
             path = min;
         }
     }
-    else if (rType == SOURCEROUTINGNORMAL) {
+    else if (rType == SOURCEROUTINGNORMAL || rType == HOPBYHOP) {
         Dijkstra::Route min;
         path.clear();
         path2.clear();
@@ -289,10 +289,18 @@ void RoutingModule::readTopo()
                 }
             }
             dijFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
-            dijkstra->addEdge(address, addressAux, minResidual,1);
+            if (rType == HOPBYHOP) {
+                dijkstra->addEdge(address, addressAux, 1,10000);
+
+                if (dijkstraks)
+                    dijkstraks->addEdge(address, addressAux, 1 ,1, 1, 1);
+            }
+            else {
+                dijkstra->addEdge(address, addressAux, minResidual,1);
+                if (dijkstraks)
+                    dijkstraks->addEdgeWs(address, addressAux,1,minResidual);
+            }
             dj.addEdge(address, addressAux, 1, 10000);
-            if (dijkstraks)
-                dijkstraks->addEdgeWs(address, addressAux,1,minResidual);
             if (dijkstraksFuzzy)
                 dijkstraksFuzzy->addEdge(address, addressAux, minResidual, meanResidual, maxResidual);
         }
@@ -306,6 +314,7 @@ void RoutingModule::readTopo()
 void RoutingModule::procActualize(Actualize *pkt)
 {
     // actualiza los estados para ejecutar disjtra.
+
     int nodeId = pkt->getSrcAddr();
     for (unsigned int i = 0; i < pkt->getLinkDataArraySize(); i++) {
         LinkData linkData = pkt->getLinkData(i);
@@ -331,18 +340,18 @@ void RoutingModule::procActualize(Actualize *pkt)
             double instResidual = linkData.nominal - linkData.actual;
 
             if (residual) {
-                if (minResidual < 1e30)
-                    minResidual = 1 / 1e30;
+                if (minResidual < 1e-30)
+                    minResidual = 1 / 1e-30;
                 else
                     minResidual = 1 / minResidual;
 
-                if (meanResidual < 1e30)
-                    meanResidual = 1 / 1e30;
+                if (meanResidual < 1e-30)
+                    meanResidual = 1 / 1e-30;
                 else
                     meanResidual = 1 / meanResidual;
 
-                if (maxResidual < 1e30)
-                    maxResidual = 1 / 1e30;
+                if (maxResidual < 1e-30)
+                    maxResidual = 1 / 1e-30;
                 else
                     maxResidual = 1 / maxResidual;
             }
@@ -383,28 +392,51 @@ void RoutingModule::procActualize(Actualize *pkt)
             dijFuzzy->addEdge(nodeId, linkData.node, minResidual, meanResidual, maxResidual);
             if (dijkstraksFuzzy)
                 dijkstraksFuzzy->addEdge(nodeId, linkData.node, minResidual, meanResidual, maxResidual);
-            if (par("instValue").boolValue()) {
-                if (rType == SW || rType == WS)
-                    dijkstra->addEdge(nodeId, linkData.node, 1, linkData.nominal - linkData.actual);
-                else
-                    dijkstra->addEdge(nodeId, linkData.node, instResidual, 1);
+            if (rType == HOPBYHOP) {
+                dijkstra->addEdge(nodeId, linkData.node, 1,10000);
                 if (dijkstraks)
-                    dijkstraks->addEdgeWs(nodeId, linkData.node, 1, instResidual);
-
+                    dijkstraks->addEdge(nodeId, linkData.node, 1 ,1, 1, 1);
             }
             else {
-                double minResidual = linkData.nominal - linkData.max;
-                double meanResidual = linkData.nominal - linkData.mean;
-                double maxResidual = linkData.nominal - linkData.min;
-                DijkstraFuzzy::FuzzyCost costFuzzy(minResidual,meanResidual,maxResidual);
-                if (rType == SW || rType == WS)
-                    dijkstra->addEdge(nodeId, linkData.node, 1, meanResidual);
-                else if (rType == SWFUZZY || rType == WSFUZZY)
-                    dijkstra->addEdge(nodeId, linkData.node, 1, costFuzzy.exp());
-                else
-                    dijkstra->addEdge(nodeId, linkData.node, meanResidual, 1);
-                if (dijkstraks)
-                    dijkstraks->addEdgeWs(nodeId, linkData.node, 1 ,meanResidual);
+                if (par("instValue").boolValue()) {
+                    if (rType == SW || rType == WS)
+                        dijkstra->addEdge(nodeId, linkData.node, 1, linkData.nominal - linkData.actual);
+                    else
+                        dijkstra->addEdge(nodeId, linkData.node, instResidual, 1);
+                    if (dijkstraks)
+                        dijkstraks->addEdgeWs(nodeId, linkData.node, 1, instResidual);
+                }
+                else {
+                    double minResidual = linkData.nominal - linkData.max;
+                    double meanResidual = linkData.nominal - linkData.mean;
+                    double maxResidual = linkData.nominal - linkData.min;
+                    if (residual) {
+                         if (minResidual < 1e-30)
+                             minResidual = 1 / 1e-30;
+                         else
+                             minResidual = 1 / minResidual;
+
+                         if (meanResidual < 1e-30)
+                             meanResidual = 1 / 1e-30;
+                         else
+                             meanResidual = 1 / meanResidual;
+
+                         if (maxResidual < 1e-30)
+                             maxResidual = 1 / 1e-30;
+                         else
+                             maxResidual = 1 / maxResidual;
+                     }
+
+                    DijkstraFuzzy::FuzzyCost costFuzzy(minResidual,meanResidual,maxResidual);
+                    if (rType == SW || rType == WS)
+                        dijkstra->addEdge(nodeId, linkData.node, 1, meanResidual);
+                    else if (rType == SWFUZZY || rType == WSFUZZY)
+                        dijkstra->addEdge(nodeId, linkData.node, 1, costFuzzy.exp());
+                    else
+                        dijkstra->addEdge(nodeId, linkData.node, meanResidual, 1);
+                    if (dijkstraks)
+                        dijkstraks->addEdgeWs(nodeId, linkData.node, 1 ,meanResidual);
+                }
             }
         }
     }

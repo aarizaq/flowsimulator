@@ -413,9 +413,11 @@ void RoutingModule::procActualize(Actualize *pkt)
                         dijkstraks->addEdgeWs(nodeId, linkData.node, 1, instResidual);
                 }
                 else {
+
                     double minResidual = linkData.nominal - linkData.max;
                     double meanResidual = linkData.nominal - linkData.mean;
                     double maxResidual = linkData.nominal - linkData.min;
+
                     if (residual) {
                          if (minResidual < 1e-30)
                              minResidual = 1 / 1e-30;
@@ -431,7 +433,14 @@ void RoutingModule::procActualize(Actualize *pkt)
                              maxResidual = 1 / 1e-30;
                          else
                              maxResidual = 1 / maxResidual;
-                     }
+                    }
+                    else if (normalized && rType != SW && rType != WS && rType != WSFUZZY && rType != SWFUZZY) {
+                        minResidual = (linkData.min / linkData.nominal);
+                        meanResidual = (linkData.mean / linkData.nominal);
+                        maxResidual = (linkData.max / linkData.nominal);
+                        instResidual = linkData.actual / linkData.nominal;
+                    }
+
 
                     DijkstraFuzzy::FuzzyCost costFuzzy(minResidual,meanResidual,maxResidual);
                     if (rType == SW || rType == WS)

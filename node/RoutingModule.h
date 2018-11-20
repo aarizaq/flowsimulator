@@ -60,6 +60,7 @@ protected:
     DijkstraKshortestFuzzy *dijkstraksFuzzy = nullptr;
 
     bool residual = false;
+    bool normalized = true;
 
     std::vector<double> percentajesValues;
     std::vector<double> sanctionValues;

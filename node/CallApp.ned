@@ -42,7 +42,7 @@ simple CallApp like IApp
         bool independentFlows = default(false);
         volatile double flowArrival @unit(s) = default(exponential(1s));
         volatile double flowDuration @unit(s) = default(exponential(1s));
-        volatile double flowUsedBandwith @unit(bps);  //
+        volatile double flowUsedBandwith @unit(bps) = default(600bps);  //
         
         volatile int flowPacketSize @unit(b) = default(1000b);  // The inter arrival packet is computed in base to flowUsedBandwith              
         

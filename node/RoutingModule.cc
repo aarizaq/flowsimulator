@@ -191,9 +191,15 @@ void RoutingModule::readTopo()
 {
     if (dijFuzzy == nullptr) {
         dijFuzzy = new DijkstraFuzzy;
+        if (par("otherCost").boolValue())
+            dijFuzzy->setOther(true);
+
     }
-    else
+    else {
+        if (par("otherCost").boolValue())
+            dijFuzzy->setOther(true);
         dijFuzzy->clearAll();
+    }
 
     if (dijkstra == nullptr) {
         dijkstra = new Dijkstra();

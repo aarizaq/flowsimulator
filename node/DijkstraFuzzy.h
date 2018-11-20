@@ -44,10 +44,14 @@ typedef int NodeId;
 
 typedef std::vector<std::pair<NodeId, NodeId> > NodePairs;
 
+
 class DijkstraFuzzy
 {
+    static bool otherCost;
     enum StateLabel {perm,tent};
 public:
+    void setOther(bool p) {otherCost = p;}
+    bool getOther() {return otherCost;}
     struct FuzzyCost
     {
         double cost1 = 0;
@@ -70,11 +74,12 @@ public:
             return lhs;
         }
         const double exp() const {
-#ifdef OtherCost
-            return ( cost1 + 4 * cost2 + cost3);}
-#else
-            return ((1 - DijkstraFuzzy::alpha) * cost1 + cost2 + DijkstraFuzzy::alpha * cost3);}
-#endif
+            if (otherCost)
+                return ( cost1 + 4 * cost2 + cost3);
+            else
+                return ((1 - DijkstraFuzzy::alpha) * cost1 + cost2 + DijkstraFuzzy::alpha * cost3);
+        }
+
     };
     class SetElem
     {

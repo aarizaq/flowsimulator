@@ -31,6 +31,7 @@ simple RoutingModule like IRouting
         string santionValues = default("1 5 10");// only used if levelsValues has values, in this case the size of this must be equal in both 
         
         bool useAlpha = default(false); // use alpha to correct he diferences in the link nominal bandwidth
+        bool otherCost = default(false);
     gates:
         input in;
         output out;

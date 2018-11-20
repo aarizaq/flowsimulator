@@ -23,6 +23,8 @@ DijkstraFuzzy::FuzzyCost DijkstraFuzzy::minimumCost = {0, 0, 0};
 DijkstraFuzzy::FuzzyCost DijkstraFuzzy::maximumCost = {std::numeric_limits<double>::max(),  std::numeric_limits<double>::max(),  std::numeric_limits<double>::max()};
 double DijkstraFuzzy::alpha = 0.55;
 
+bool DijkstraFuzzy::otherCost = false;
+
 DijkstraFuzzy::State::State()
 {
     idPrev = InvalidId;

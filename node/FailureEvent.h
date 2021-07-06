@@ -27,7 +27,7 @@ struct Event : public cObject
     {
         return type == o.type && linkId == o.linkId;
     }
-    std::string info() const override
+    std::string str() const override
     {
         std::stringstream out;
 

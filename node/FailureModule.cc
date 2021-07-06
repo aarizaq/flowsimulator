@@ -28,7 +28,7 @@ simsignal_t FailureModule::eventSignal = registerSignal("EventSignal");
 
 std::ostream& operator<<(std::ostream& os, const Event& e)
 {
-    os << e.info();
+    os << e.str();
     return os;
 };
 
@@ -41,7 +41,7 @@ std::string FailureModule::str() const
         out << "Event list empty";
     for (auto elem : eventList) {
         out << "Event time : " << elem.first;
-        out << "  Event - " << elem.second.info();
+        out << "  Event - " << elem.second.str();
         out << endl;
     }
     return out.str();
